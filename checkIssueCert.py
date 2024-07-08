@@ -44,7 +44,7 @@ def checkDNS(verification_tokens, timeout: int = 300, interval: int = 2, authori
             return True
         # Avoid flooding the DNS server(s) by briefly pausing between DNS checks
         time.sleep(interval)
-    return True
+    return False
 
 
 def request_certificate(acme_client, responses, csr, email, wait: int = 0, timeout: int = 90):
@@ -53,24 +53,30 @@ def request_certificate(acme_client, responses, csr, email, wait: int = 0, timeo
     time.sleep(wait)
     deadline = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
     # For each domain being challenged, request answers for their challenges
-    for _, challenge_list in challenges.items():
+    for domain, challenge_list in responses.items():
         # Request an answer for each of this domain's challenges
-        for challenge in challenge_list:
-            answers.append(
-                acme_client.answer_challenge(challenge, responses) #if doesn't work, try responses[challenge.chall.token]
-            )
+        for challenge_token in challenge_list:
+            order = acme_client.new_order(csr)
+            for authorization in order.authorizations:
+                challenge = next((c for c in authorization.challenges if c.chall.token == challenge_token), None)
+                if challenge:
+                    answers.append(
+                        acme_client.answer_challenge(challenge, challenge_token)
+                    )
+                else:
+                    print(f"Challenge not found for token: {challenge_token}")
         # Request our final order and save the certificate if successful
     with open(csr, 'r') as f:
         csr_pem = f.read()
     order = acme_client.new_order(csr_pem)
     final_order = acme_client.poll_and_finalize(order, deadline=deadline)
     certificate = final_order.fullchain_pem.encode()
-    certFile = f"{(email.split("@")[0])}/private.pem"
+    certFile = f"{(email.split('@')[0])}/private.pem"
     savefile(certFile, certificate)
     return certFile, certificate
 
 def checkIssueCert(verification_tokens, acme_client, responses, domainCSR, email):
-    status: bool = checkDNS(verification_tokens, timeout = 300, interval = 10, authoritative = False, round_robin = True, verbose = True)
+    status: bool = checkDNS(verification_tokens, timeout = 30, interval = 5, authoritative = False, round_robin = True, verbose = True)
     certFile, certificate = request_certificate(acme_client, responses, domainCSR, email, wait = 0, timeout = 90)
     return status, certFile, certificate
 

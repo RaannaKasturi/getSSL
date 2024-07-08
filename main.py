@@ -101,18 +101,14 @@ def extractSubDomains(domains):
 def genCNAMEValues(domains, cfDomain):
     tempCNAMEValues = []
     CNAMEValues = []
-    print("\n\nTempCNAME:\n", tempCNAMEValues)
-    print("\n\nCNAME:\n", CNAMEValues)
     subdomains, exchange = extractSubDomains(domains)
     for domain in domains:
         CNAMEValue = prefix(domain)
         CNAMEValue = f"{CNAMEValue}.{domain}"
         tempCNAMEValues.append(CNAMEValue)
-    print("\n\nTempCNAME:\n", tempCNAMEValues)
     for CNAMEValue in tempCNAMEValues:
         modified_CNAMEValue = CNAMEValue.replace(exchange, cfDomain)
         CNAMEValues.append(modified_CNAMEValue)
-    print("\n\nCNAME:\n", CNAMEValues)
     return CNAMEValues
 
 def genTXTRecs(CNAMEValues, cfDomain):
@@ -151,9 +147,6 @@ if __name__ == '__main__':
     caServer = chooseCAserver("letsencrypt_test")
     privateKey, domainCSR = genCSR(email, domains)
     verification_tokens, cnameRecords, txtValues, acme_client, responses = acmeProcess(email, domains, privateKey, domainCSR, caServer)
-    print("---------------------------------")
-    print(f"Verification Tokens:\n{verification_tokens}")
-    print("---------------------------------")
     cnameValues = genCNAMEValues(domains, cfDomain)
     txtRecords = genTXTRecs(cnameValues, cfDomain)  
     for i in range(len(cnameRecords)):
