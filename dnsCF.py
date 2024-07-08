@@ -1,0 +1,64 @@
+import requests
+import os
+from load_dotenv import load_dotenv
+
+load_dotenv()
+CF_TOKEN = os.getenv("CF_TOKEN")
+CF_ZONE_ID = os.getenv("CF_ZONE_ID")
+CF_EMAIL_ID = os.getenv("CF_EMAIL_ID")
+CF_API = "https://api.cloudflare.com/client/v4/"
+
+headers = {
+    "Content-Type": "application/json",
+    "X-Auth-Email": CF_EMAIL_ID,
+    "X-Auth-Key": CF_TOKEN
+}
+
+def checkTXT(TXTRecs):
+    cf_endpoint = f"zones/{CF_ZONE_ID}/dns_records"
+    url = f"{CF_API}{cf_endpoint}"
+    response = requests.request("GET", url, headers=headers)
+    name = TXTRecs
+    data = response.json()
+    recordIDs = []
+    recordNames = []
+    for record in data['result']:
+        if record['type'] == "TXT":
+            recordID = record['id']
+            recordName = record['name']
+            recordIDs.append(recordID)
+            recordNames.append(recordName)
+        else:
+            continue
+    return recordIDs, recordNames
+        
+def addTXT(TXTRec, TXTValue, SSLEmail):
+    cf_endpoint = f"zones/{CF_ZONE_ID}/dns_records"
+    url = f"{CF_API}{cf_endpoint}"
+    name = TXTRec
+    data = {
+        "type": "TXT",
+        "name": name,
+        "content": TXTValue,
+        "ttl": 1,
+        "proxied": False,
+        "comment": f"SSL Verification for {SSLEmail}"
+    }
+    response = requests.request("POST", url, headers=headers, json=data)
+    return response.json()
+
+def delTXT(TXTRecs):
+    recordIDs, recordNames = checkTXT(TXTRecs)
+    for recordID, recordName in zip(recordIDs, recordNames):
+        if recordName.startswith(TXTRecs):
+            try:
+                cf_endpoint = f"zones/{CF_ZONE_ID}/dns_records/{recordID}"
+                url = f"{CF_API}{cf_endpoint}"
+                requests.request("DELETE", url, headers=headers)
+                res = f"record {recordName} deleted"
+            except:
+                res = f"error deleting record {recordName}"
+        else:
+            res = f"record {recordName} not found"
+            continue
+    return res
