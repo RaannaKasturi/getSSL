@@ -1,7 +1,6 @@
-import datetime
 import hashlib
-import os
-import time
+
+from genPrivCSR import genPrivCSR
 from dnsCF import addTXT, delTXT
 
 def getDomains(iDomains):
@@ -90,13 +89,16 @@ if __name__ == '__main__':
     iDomains = "thenayankasturi.eu.org, www.thenayankasturi.eu.org, mail.thenayankasturi.eu.org"
     cfDomain = "silerudaagartha.eu.org"
     domains = getDomains(iDomains)
+    privFile, csrFile = genPrivCSR(email, domains)
     caServer = chooseCAserver("letsencrypt_test")
+    """
     cnameValues = genCNAMEValues(domains, cfDomain)
-    txtRecords = genTXTRecs(cnameValues, cfDomain)  
+    txtRecords = genTXTRecs(cnameValues, cfDomain)
     for i in range(len(cnameRecords)):
         print(f"Add {cnameRecords[i]} with value {cnameValues[i]} to your DNS records\n")
     #time.sleep(60) #change to 60 later
     addToCF(txtRecords, txtValues, email)
     #time.sleep(30) #change to 60 later
     delFromCF(txtRecords)
-
+    """
+    print(f"Private Key: {privFile}\nCSR: {csrFile}\nCA Server: {caServer}")

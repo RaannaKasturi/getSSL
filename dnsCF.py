@@ -18,15 +18,10 @@ def checkTXT(TXTRecs):
     cf_endpoint = f"zones/{CF_ZONE_ID}/dns_records"
     url = f"{CF_API}{cf_endpoint}"
     response = requests.request("GET", url, headers=headers)
-    name = TXTRecs
     data = response.json()
     recordIDs = []
     recordNames = []
     for record in data['result']:
-        recordID = record['id']
-        recordName = record['name']
-        recordIDs.append(recordID)
-        recordNames.append(recordName)
         if record['type'] == "TXT":
             recordID = record['id']
             recordName = record['name']
@@ -59,12 +54,10 @@ def delTXT(TXTName):
                 cf_endpoint = f"zones/{CF_ZONE_ID}/dns_records/{recordID}"
                 url = f"{CF_API}{cf_endpoint}"
                 requests.request("DELETE", url, headers=headers)
-                res = f"record {recordName} deleted"
+                res = f"records deleted"
             except:
-                res = f"error deleting record {recordName}"
+                res = f"error deleting records"
         else:
-            res = f"record {recordName} not found"
+            res = f"records not found"
             continue
     return res
-
-delTXT()
