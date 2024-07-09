@@ -2,10 +2,7 @@ import datetime
 import hashlib
 import os
 import time
-from genPrivCSR import genPrivCSR
-from acmeProcesses import acmeProcesses
 from dnsCF import addTXT, delTXT
-from checkIssueCert import checkIssueCert
 
 def getDomains(iDomains):
     domains = []
@@ -36,57 +33,6 @@ def chooseCAserver(provider):
     else:
         print("Invalid provider.")
         return None
-
-def genCSR(email, domains, key_type="", common_name="", country="", state="", locality="", organization="", organization_unit=""):
-    domainset = []
-    for domain in domains:
-        domain = domain.strip()
-        if domain.startswith("*."):
-            print("Wildcard domains are not supported")
-            exit(1)
-        else:
-            domainset.append(domain)
-    domainset = domains
-    if key_type.lower() == '':
-        key_type = 'rsa2048'
-    if key_type.lower() not in ['ec256', 'ec384', 'rsa2048', 'rsa4096']:
-        print(f"Invalid private key type '{key_type}'. Options: ['ec256', 'ec384', 'rsa2048', 'rsa4096']")
-        exit(1)
-    else:
-        key_type = key_type.lower()
-    if common_name == '':
-        common_name = domains[0]
-    if country == '':
-        country = 'IN'
-    if state == '':
-        state = 'Maharashra'
-    if locality == '':
-        locality = 'Mumbai'
-    if organization == '':
-        organization = domains[0].split(".")[0]
-    if organization_unit == '':
-        organization_unit = 'IT'
-    if email == '':
-        print("Email is required")
-        exit(1)
-    elif '@' not in email:
-        print("Invalid email")
-        exit(1)
-    elif (email.split("@")[1]) == "example.com" or (email.split("@")[1]) == "demo.com":
-        print(email.split("@")[1])
-        print("Please provide your original email")
-        exit(1)
-    else:
-        email = email
-    os.makedirs(f"{(email.split("@")[0])}", exist_ok=True)
-    privFile = f"{(email.split("@")[0])}/private.pem"
-    csrFile = f"{(email.split("@")[0])}/domain.csr"
-    private_key, csr = genPrivCSR(key_type, privFile, csrFile, common_name, country, state, locality, organization, organization_unit, email, domains)
-    return private_key, csr
-
-def acmeProcess(email, domains, privFile, csrFile, CAserver):
-    verification_tokens, keyset, valueset, acme_client, responses = acmeProcesses(privFile, CAserver, email, csrFile, domains)
-    return verification_tokens, keyset, valueset, acme_client, responses
 
 def prefix(domain):
     domain_bytes = domain.encode()
@@ -145,8 +91,6 @@ if __name__ == '__main__':
     cfDomain = "silerudaagartha.eu.org"
     domains = getDomains(iDomains)
     caServer = chooseCAserver("letsencrypt_test")
-    privateKey, domainCSR = genCSR(email, domains)
-    verification_tokens, cnameRecords, txtValues, acme_client, responses = acmeProcess(email, domains, privateKey, domainCSR, caServer)
     cnameValues = genCNAMEValues(domains, cfDomain)
     txtRecords = genTXTRecs(cnameValues, cfDomain)  
     for i in range(len(cnameRecords)):
@@ -154,8 +98,5 @@ if __name__ == '__main__':
     #time.sleep(60) #change to 60 later
     addToCF(txtRecords, txtValues, email)
     #time.sleep(30) #change to 60 later
-    status, certFile, certificate = checkIssueCert(verification_tokens, acme_client, responses, domainCSR, email)
-    print(f"DNS Status: {status}")
-    print(f"Certificate saved to {certFile}")
     delFromCF(txtRecords)
 

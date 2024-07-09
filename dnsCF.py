@@ -23,6 +23,10 @@ def checkTXT(TXTRecs):
     recordIDs = []
     recordNames = []
     for record in data['result']:
+        recordID = record['id']
+        recordName = record['name']
+        recordIDs.append(recordID)
+        recordNames.append(recordName)
         if record['type'] == "TXT":
             recordID = record['id']
             recordName = record['name']
@@ -47,10 +51,10 @@ def addTXT(TXTRec, TXTValue, SSLEmail):
     response = requests.request("POST", url, headers=headers, json=data)
     return response.json()
 
-def delTXT(TXTRecs):
-    recordIDs, recordNames = checkTXT(TXTRecs)
+def delTXT(TXTName):
+    recordIDs, recordNames = checkTXT(TXTName)
     for recordID, recordName in zip(recordIDs, recordNames):
-        if recordName.startswith(TXTRecs):
+        if recordName.startswith(TXTName):
             try:
                 cf_endpoint = f"zones/{CF_ZONE_ID}/dns_records/{recordID}"
                 url = f"{CF_API}{cf_endpoint}"
@@ -62,3 +66,5 @@ def delTXT(TXTRecs):
             res = f"record {recordName} not found"
             continue
     return res
+
+delTXT()
