@@ -1,16 +1,12 @@
 import argparse
-import subprocess
 import json
-import urllib.request
 import sys
-import base64
 import binascii
 import time
 import hashlib
 import re
 from urllib.request import urlopen
-from urllib.error import URLError
-from acmens import _cmd, _b64, _agree_to, _send_signed_request, _poll_until_not
+from acmens import _cmd, _b64, _agree_to, _send_signed_request
 
 __version__ = "0.3.0"
 
@@ -22,11 +18,13 @@ def get_directory(ca_url):
     global CA_DIR
     if CA_DIR is None:
         CA_DIR = json.loads(urlopen(ca_url + "/directory").read().decode("utf8"))
+    print(f"Fetched CA Directory: {CA_DIR}")
     return CA_DIR
 
 def get_public_key(account_key):
     sys.stderr.write("Reading pubkey file...\n")
     out = _cmd(["openssl", "rsa", "-in", account_key, "-noout", "-text"], err_msg="Error reading account public key")
+    print(f"Public key output: {out.decode('utf8')}")
     pub_hex, pub_exp = re.search(r"modulus:[\s]+?00:([a-f0-9\:\s]+?)\npublicExponent: ([0-9]+)", out.decode("utf8"), re.MULTILINE | re.DOTALL).groups()
     pub_mod = binascii.unhexlify(re.sub(r"(\s|:)", "", pub_hex))
     pub_mod64 = _b64(pub_mod)
@@ -41,21 +39,22 @@ def get_public_key(account_key):
 
 def poll_until_not(url, pending_statuses, nonce_url, auth, account_key, err_msg):
     """Poll until status is not in pending_statuses"""
-    result, t0, delay = None, time.time(), 2
+    result, t0, delay = None, time.time(), 5  # Increase initial delay to 5 seconds
     while result is None or result["status"] in pending_statuses:
         assert time.time() - t0 < 3600, "Polling timeout"  # 1 hour timeout
         sys.stderr.write(f"Checking order status: {result['status'] if result else 'None'}\n")
         time.sleep(delay)
-        delay = min(delay +1, 60)  # Increase the delay, up to a maximum of 60 seconds
+        delay = min(delay * 2, 120)  # Increase the delay, up to a maximum of 120 seconds
         result, _, _ = _send_signed_request(
             url, None, nonce_url, auth, account_key, err_msg
         )
-    sys.stderr.write(f"Final order status: {result['status']}\n")
+        sys.stderr.write(f"Final order status: {result['status']}\n")
     return result
 
 def get_csr_domains(csr):
     sys.stderr.write("Reading csr file...\n")
     out = _cmd(["openssl", "req", "-in", csr, "-noout", "-text"], err_msg="Error reading CSR")
+    print(f"CSR output: {out.decode('utf8')}")
     domains = set()
     cn = None
     common_name = re.search(r"Subject:.*? CN *= *([^\s,;/]+)", out.decode("utf8"))
@@ -81,6 +80,7 @@ def register_account(ca_url, account_key, email):
     auth = {"jwk": get_public_key(account_key)}
     acct_headers = None
     result, code, acct_headers = _send_signed_request(get_directory(ca_url)["newAccount"], reg, nonce_url, auth, account_key, "Error registering")
+    print(f"Registration result: {result}, code: {code}, headers: {acct_headers}")
     if code == 201:
         sys.stderr.write("Registered!\n")
     else:
@@ -97,11 +97,13 @@ def request_challenges(ca_url, auth, domains, account_key):
     for domain in domains:
         id["identifiers"].append({"type": "dns", "value": domain})
     order, order_code, order_headers = _send_signed_request(get_directory(ca_url)["newOrder"], id, get_directory(ca_url)["newNonce"], auth, account_key, "Error creating new order")
+    print(f"Order result: {order}, code: {order_code}, headers: {order_headers}")
     return order, order_headers
 
 def do_dns_challenge(ca_url, auth, order, domain, thumbprint, account_key):
     sys.stderr.write("Requesting challenges...\n")
     chl_result, chl_code, chl_headers = _send_signed_request(order["authorizations"][0], None, get_directory(ca_url)["newNonce"], auth, account_key, "Error getting challenges")
+    print(f"Challenges result: {chl_result}, code: {chl_code}, headers: {chl_headers}")
     challenge = None
     for authz in order["authorizations"]:
         authz_result, authz_code, authz_headers = _send_signed_request(authz, None, get_directory(ca_url)["newNonce"], auth, account_key, "Error getting authorization")
@@ -129,43 +131,86 @@ def do_dns_challenge(ca_url, auth, order, domain, thumbprint, account_key):
 
 def finalize_order(ca_url, auth, order, order_headers, csr, account_key):
     sys.stderr.write("Waiting for challenges to pass...\n")
+
+    # Polling until the order status is not pending or processing
     order = poll_until_not(order_headers["Location"], ["pending", "processing"], get_directory(ca_url)["newNonce"], auth, account_key, "Error checking order status")
-    print(order)
-    if order["status"] == "ready":
-        sys.stderr.write("Passed challenges!\n")
-    else:
-        raise ValueError("Challenges did not pass")
+
+    # Check if the order status is already valid
+    if order["status"] == "valid":
+        sys.stderr.write("Order is already valid. No need to finalize again.\n")
+        return None
+
+    if order["status"] != "ready":
+        raise ValueError("Order status is not ready for finalization")
+
+    sys.stderr.write("Passed challenges!\n")
     sys.stderr.write("Getting certificate...\n")
+    
+    # Converting CSR to DER format
     csr_der = _cmd(["openssl", "req", "-in", csr, "-outform", "DER"], err_msg="DER Export Error")
+    
+    # Finalizing the order
     fnlz_resp, fnlz_code, fnlz_headers = _send_signed_request(order["finalize"], {"csr": _b64(csr_der)}, get_directory(ca_url)["newNonce"], auth, account_key, "Error finalizing order")
-    print("------------------------------------------------------------")
-    #print(_send_signed_request(order['finalize']))
-    print("------------------------------------------------------------")
-    signed_pem, _, _ = _send_signed_request(order["finalize"], None, get_directory(ca_url)["newNonce"], auth, account_key, "Error getting certificate")
+    sys.stderr.write(f"Finalize response code: {fnlz_code}\n")
+    sys.stderr.write(f"Finalize response: {fnlz_resp}\n")
+
+    if fnlz_code != 200:
+        raise ValueError("Failed to finalize the order")
+
+    # Polling until the order status is not pending or processing
+    order = poll_until_not(order_headers["Location"], ["pending", "processing"], get_directory(ca_url)["newNonce"], auth, account_key, "Error checking order status after finalization")
+
+    if order["status"] == "valid":
+        sys.stderr.write("Order finalized successfully!\n")
+    else:
+        raise ValueError("Order finalization failed")
+
+    # Getting the certificate
+    cert_resp, cert_code, cert_headers = _send_signed_request(order["certificate"], None, get_directory(ca_url)["newNonce"], auth, account_key, "Error getting certificate")
+    sys.stderr.write(f"Certificate response code: {cert_code}\n")
+    sys.stderr.write(f"Certificate response: {cert_resp}\n")
+
+    if cert_code != 200:
+        raise ValueError("Failed to get the certificate")
+
     sys.stderr.write("Received certificate!\n")
-    return signed_pem
+    return cert_resp  # Removed decode("utf8")
+
+def save_cert(cert, filename):
+    with open(filename, 'w') as f:
+        f.write(cert)
+    sys.stderr.write(f"Certificate saved to {filename}\n")
 
 def main():
-    ca_url = CA_STG
-    account_key = "private.pem"
-    csr = "domain.csr"
-    email = "raannakasturi@gmail.com"
-    challenge_type = "dns"
-    
-    jwk = get_public_key(account_key)
-    accountkey_json = json.dumps(jwk, sort_keys=True, separators=(",", ":"))
-    thumbprint = _b64(hashlib.sha256(accountkey_json.encode()).digest())
-    
+    parser = argparse.ArgumentParser(description='ACME client script.')
+    parser.add_argument('--account-key', required=True, help='Path to the account private key file.')
+    parser.add_argument('--csr', required=True, help='Path to the certificate signing request file.')
+    parser.add_argument('--email', required=True, help='Email address for registration.')
+    parser.add_argument('--ca', default=CA_PRD, help='CA URL, default is LetsEncrypt staging.')
+    parser.add_argument('--dns', action='store_true', help='Use DNS-01 challenge instead of HTTP-01.')
+    args = parser.parse_args()
+
+    account_key = args.account_key
+    csr = args.csr
+    email = args.email
+    ca_url = args.ca
+    use_dns = args.dns
+
+    domains, common_name = get_csr_domains(csr)
     auth = register_account(ca_url, account_key, email)
-    
-    domains, cn = get_csr_domains(csr)
     order, order_headers = request_challenges(ca_url, auth, domains, account_key)
-    
-    for domain in domains:
-        order = do_dns_challenge(ca_url, auth, order, domain, thumbprint, account_key)
-    signed_crt = finalize_order(ca_url, auth, order, order_headers, csr, account_key)
-    
-    sys.stdout.write(signed_crt)
+
+    if use_dns:
+        thumbprint = _b64(hashlib.sha256(json.dumps(get_public_key(account_key), sort_keys=True, separators=(',', ':')).encode()).digest())
+        for domain in domains:
+            order = do_dns_challenge(ca_url, auth, order, domain, thumbprint, account_key)
+    else:
+        raise ValueError("Only DNS challenge supported in this script")
+
+    cert = finalize_order(ca_url, auth, order, order_headers, csr, account_key)
+    if cert:
+        save_cert(cert, 'certificate.pem')
 
 if __name__ == "__main__":
     main()
+    #python3 testing.py --account-key raannakasturi/tempPrivate.pem --csr raannakasturi/domain.csr --email raannakasturi@gmail.com --dns

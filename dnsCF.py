@@ -1,6 +1,6 @@
 import requests
 import os
-from load_dotenv import load_dotenv
+from dotenv import load_dotenv
 
 load_dotenv()
 CF_TOKEN = os.getenv("CF_TOKEN")

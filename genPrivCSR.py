@@ -123,17 +123,20 @@ def genPrivCSR(email, domains, key_type="", common_name="", country="IN", state=
     organization = organization or common_name.split(".")[0]
     path = email.split("@")[0]
     os.makedirs(path, exist_ok=True)
-    privdata, pubdata = generate_private_key(key_type)
+    tempPrivFile = f"{path}/tempPrivate.pem"
     privFile = f"{path}/private.pem"
     pubFile = f"{path}/public.pem"
     csrFile = f"{path}/domain.csr"
+    privdata, pubdata = generate_private_key(key_type)
+    tempPrivdata, _ = generate_private_key(key_type)
+    savefile(tempPrivFile, tempPrivdata)
     savefile(privFile, privdata)
     savefile(pubFile, pubdata)
     csrdata = genCSR(privdata, email, domains, common_name, country, state, locality, organization, organization_unit)
     savefile(csrFile, csrdata)
     if verifyPrivCSR(privdata, csrdata):
         print("Private key and CSR are verified")
-        return privFile, csrFile
+        return privFile, csrFile, tempPrivFile
     else:
         print("Error in generating Private Key and CSR. Please try again.")
         return None, None

@@ -86,10 +86,10 @@ def delFromCF(txtRecords):
 
 if __name__ == '__main__':
     email = "raannakasturi@gmail.com"
-    iDomains = "thenayankasturi.eu.org, www.thenayankasturi.eu.org, mail.thenayankasturi.eu.org"
+    iDomains = "thenayankasturi.eu.org, www.thenayankasturi.eu.org, dash.thenayankasturi.eu.org"
     cfDomain = "silerudaagartha.eu.org"
     domains = getDomains(iDomains)
-    privFile, csrFile = genPrivCSR(email, domains)
+    privFile, csrFile, tempPrivFile = genPrivCSR(email, domains)
     caServer = chooseCAserver("letsencrypt_test")
     """
     cnameValues = genCNAMEValues(domains, cfDomain)
