@@ -103,8 +103,7 @@ if __name__ == '__main__':
     txtRecords = genTXTRecs(cnameValues, cfDomain)
     for i in range(len(cnameRecords)):
         print(f"Add {cnameRecords[i]} with value {cnameValues[i]} to your DNS records\n")
-    #time.sleep(60) #change to 60 later
     #addToCF(txtRecords, txtValues, email)
-    #time.sleep(30) #change to 60 later
+    #time.sleep(60) #change to 60 later
     #delFromCF(txtRecords)
     print(f"Private Key: {privFile}\nCSR: {csrFile}\nCA Server: {caServer}")

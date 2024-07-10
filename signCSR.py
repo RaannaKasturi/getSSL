@@ -1,12 +1,15 @@
 import argparse
+import urllib.request
+import base64
 import json
+import subprocess
 import sys
 import binascii
 import time
 import hashlib
 import re
+from urllib.error import URLError
 from urllib.request import urlopen
-from acmens import _cmd, _b64, _agree_to, _send_signed_request
 
 __version__ = "0.3.0"
 
@@ -20,17 +23,106 @@ def get_directory(ca_url):
         CA_DIR = json.loads(urlopen(ca_url + "/directory").read().decode("utf8"))
     return CA_DIR
 
+def cmd(cmd_list, stdin=None, cmd_input=None, err_msg="Command Line Error"):
+    "Runs external commands"
+    proc = subprocess.Popen(
+        cmd_list, stdin=stdin, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+    )
+    out, err = proc.communicate(cmd_input)
+    if proc.returncode != 0:
+        sys.stderr.write("{0}: {1}\n".format(err_msg, err.decode()))
+        sys.exit(1)
+    return out
+
+def b64(b):
+    if type(b) is str:
+        b = b.encode()
+    return base64.urlsafeb64encode(b).decode().replace("=", "")
+
+def do_request(url, data=None, err_msg="Error"):
+    try:
+        resp = urllib.request.urlopen(
+            urllib.request.Request(
+                url,
+                data=data,
+                headers={
+                    "Content-Type": "application/jose+json",
+                    "User-Agent": "acmens",
+                },
+            )
+        )
+        resp_data, code, headers = (
+            resp.read().decode("utf8"),
+            resp.getcode(),
+            resp.headers,
+        )
+    except URLError as e:
+        resp_data = e.read().decode("utf8") if hasattr(e, "read") else str(e)
+        code, headers = getattr(e, "code", None), {}
+    try:
+        resp_data = json.loads(resp_data)  # try to parse json results
+    except ValueError:
+        pass  # resp_data is not a JSON string; that's fine
+    return resp_data, code, headers
+
+def _mk_signed_req_body(url, payload, nonce, auth, account_key):
+    if len(nonce) < 1:
+        sys.stderr.write("_mk_signed_req_body: nonce invalid: {}".format(nonce))
+        sys.exit(1)
+
+    payload64 = "" if payload is None else b64(json.dumps(payload).encode("utf8"))
+    protected = {"url": url, "alg": "RS256", "nonce": nonce}
+    protected.update(auth)
+    protected64 = b64(json.dumps(protected).encode("utf8"))
+    protected_input = "{0}.{1}".format(protected64, payload64).encode("utf8")
+    out = cmd(
+        ["openssl", "dgst", "-sha256", "-sign", account_key],
+        stdin=subprocess.PIPE,
+        cmd_input=protected_input,
+        err_msg="OpenSSL Error",
+    )
+    return json.dumps(
+        {"protected": protected64, "payload": payload64, "signature": b64(out)}
+    )
+
+def _send_signed_request(url, payload, nonce_url, auth, account_key, err_msg):
+    """Make signed request to ACME endpoint"""
+    tried = 0
+    nonce = do_request(nonce_url)[2]["Replay-Nonce"]
+    while True:
+        data = _mk_signed_req_body(url, payload, nonce, auth, account_key)
+        resp_data, resp_code, headers = do_request(
+            url, data=data.encode("utf8"), err_msg=err_msg
+        )
+        if resp_code in [200, 201, 204]:
+            return resp_data, resp_code, headers
+        elif (
+            resp_code == 400
+            and resp_data.get("type", "") == "urn:ietf:params:acme:error:badNonce"
+            and tried < 100
+        ):
+            nonce = headers.get("Replay-Nonce", "")
+            tried += 1
+            continue
+        else:
+            sys.stderr.write(
+                "{0}:\nUrl: {1}\nData: {2}\nResponse Code: {3}\nResponse: {4}".format(
+                    err_msg, url, data, resp_code, resp_data
+                )
+            )
+            sys.exit(1)
+
 def get_public_key(account_key):
     print("Decoding private key...")
-    out = _cmd(["openssl", "rsa", "-in", account_key, "-noout", "-text"], err_msg="Error reading account public key")
+    out = cmd(["openssl", "rsa", "-in", account_key, "-noout", "-text"], err_msg="Error reading account public key")
     pub_hex, pub_exp = re.search(r"modulus:[\s]+?00:([a-f0-9\:\s]+?)\npublicExponent: ([0-9]+)", out.decode("utf8"), re.MULTILINE | re.DOTALL).groups()
     pub_mod = binascii.unhexlify(re.sub(r"(\s|:)", "", pub_hex))
-    pub_mod64 = _b64(pub_mod)
+    pub_mod64 = b64(pub_mod)
     pub_exp = int(pub_exp)
     pub_exp = "{0:x}".format(pub_exp)
     pub_exp = "0{0}".format(pub_exp) if len(pub_exp) % 2 else pub_exp
     pub_exp = binascii.unhexlify(pub_exp)
-    pub_exp64 = _b64(pub_exp)
+    pub_exp64 = b64(pub_exp)
     jwk = {"e": pub_exp64, "kty": "RSA", "n": pub_mod64}
     print("Found public key!")
     return jwk
@@ -50,7 +142,7 @@ def poll_until_not(url, pending_statuses, nonce_url, auth, account_key, err_msg)
 
 def get_csr_domains(csr):
     print("Reading csr file...")
-    out = _cmd(["openssl", "req", "-in", csr, "-noout", "-text"], err_msg="Error reading CSR")
+    out = cmd(["openssl", "req", "-in", csr, "-noout", "-text"], err_msg="Error reading CSR")
     domains = set()
     cn = None
     common_name = re.search(r"Subject:.*? CN *= *([^\s,;/]+)", out.decode("utf8"))
@@ -70,7 +162,8 @@ def get_csr_domains(csr):
 
 def register_account(ca_url, account_key, email):
     print("Registering {0}...".format(email))
-    _agree_to(get_directory(ca_url)["meta"]["termsOfService"])
+    tos = (get_directory(ca_url)["meta"]["termsOfService"])
+    print(f"By continuing you are agreeing to Issuer's Subscriber Agreement\n{tos}")
     reg = {"termsOfServiceAgreed": True}
     nonce_url = get_directory(ca_url)["newNonce"]
     auth = {"jwk": get_public_key(account_key)}
@@ -102,19 +195,19 @@ def dns_challenges(ca_url, auth, order, domain, thumbprint, account_key):
         if challenge:
             token = challenge["token"]
             key_authorization = "{}.{}".format(token, thumbprint)
-            chl_verification = _b64(hashlib.sha256(key_authorization.encode()).digest())
+            chl_verification = b64(hashlib.sha256(key_authorization.encode()).digest())
             TXTRec = "_acme-challenge.{}".format(domain)
             TXTValue = chl_verification
             challenges_info.append((TXTRec, TXTValue, challenge["url"]))
     return challenges_info
 
 def dns_verification(ca_url, auth, challenge_url, account_key):
-    print("Requesting verification for {}...\n".format(challenge_url))
+    print("Requesting verification for {}...".format(challenge_url))
     verification_result, verification_code, verification_headers = _send_signed_request(challenge_url, {}, get_directory(ca_url)["newNonce"], auth, account_key, "Error submitting challenge")
     if verification_code != 200:
         print(f"Error submitting challenge:\nUrl: {challenge_url}\nData: {json.dumps(verification_result)}\nResponse Code: {verification_code}\nResponse: {verification_result}")
         return False
-    print("Challenge verified for {}!\n".format(challenge_url))
+    print("Challenge verified for {}!".format(challenge_url))
     return True
 
 def finalize_order(ca_url, auth, order, order_headers, csr, account_key):
@@ -130,9 +223,9 @@ def finalize_order(ca_url, auth, order, order_headers, csr, account_key):
     print("Passed challenges!")
     print("Getting certificate...")
     # Converting CSR to DER format
-    csr_der = _cmd(["openssl", "req", "-in", csr, "-outform", "DER"], err_msg="DER Export Error")
+    csr_der = cmd(["openssl", "req", "-in", csr, "-outform", "DER"], err_msg="DER Export Error")
     # Finalizing the order
-    fnlz_resp, fnlz_code, fnlz_headers = _send_signed_request(order["finalize"], {"csr": _b64(csr_der)}, get_directory(ca_url)["newNonce"], auth, account_key, "Error finalizing order")
+    fnlz_resp, fnlz_code, fnlz_headers = _send_signed_request(order["finalize"], {"csr": b64(csr_der)}, get_directory(ca_url)["newNonce"], auth, account_key, "Error finalizing order")
     print(f"Finalize response code: {fnlz_code}")
     print(f"Finalize response: {fnlz_resp}")
     if fnlz_code != 200:
@@ -190,7 +283,7 @@ def main():
     order, order_headers = request_challenges(ca_url, auth, domains, account_key)
 
     if use_dns:
-        thumbprint = _b64(hashlib.sha256(json.dumps(get_public_key(account_key), sort_keys=True, separators=(',', ':')).encode()).digest())
+        thumbprint = b64(hashlib.sha256(json.dumps(get_public_key(account_key), sort_keys=True, separators=(',', ':')).encode()).digest())
         challenges_info = []
         for domain in domains:
             challenges = dns_challenges(ca_url, auth, order, domain, thumbprint, account_key)
