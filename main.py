@@ -43,6 +43,13 @@ def extractSubDomains(domains):
     result = [domain.replace(smallest_string, '').replace('.', '') for domain in domains]
     return result, smallest_string
 
+def genCNAMERecs(domains):
+    CNAMERecs = []
+    for domain in domains:
+        CNAMERec = f"_acme-challenge.{domain}"
+        CNAMERecs.append(CNAMERec)
+    return CNAMERecs
+
 def genCNAMEValues(domains, cfDomain):
     tempCNAMEValues = []
     CNAMEValues = []
@@ -91,14 +98,13 @@ if __name__ == '__main__':
     domains = getDomains(iDomains)
     privFile, csrFile, tempPrivFile = genPrivCSR(email, domains)
     caServer = chooseCAserver("letsencrypt_test")
-    """
+    cnameRecords = genCNAMERecs(domains)
     cnameValues = genCNAMEValues(domains, cfDomain)
     txtRecords = genTXTRecs(cnameValues, cfDomain)
     for i in range(len(cnameRecords)):
         print(f"Add {cnameRecords[i]} with value {cnameValues[i]} to your DNS records\n")
     #time.sleep(60) #change to 60 later
-    addToCF(txtRecords, txtValues, email)
+    #addToCF(txtRecords, txtValues, email)
     #time.sleep(30) #change to 60 later
-    delFromCF(txtRecords)
-    """
+    #delFromCF(txtRecords)
     print(f"Private Key: {privFile}\nCSR: {csrFile}\nCA Server: {caServer}")
