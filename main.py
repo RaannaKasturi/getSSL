@@ -1,7 +1,10 @@
 import hashlib
+import time
 
+from verifyDNS import VerifyDNS
 from genPrivCSR import genPrivCSR
 from dnsCF import addTXT, delTXT
+from signCSR import getTXT, verifyTXT
 
 def getDomains(iDomains):
     domains = []
@@ -91,19 +94,56 @@ def delFromCF(txtRecords):
         stmt = "error deleting TXT records"
     return stmt
 
+def checkCert(file_path):
+    try:
+        with open(file_path, 'r') as file:
+            content = file.read()
+            if content:
+                return "File not empty"
+            else:
+                return "File empty"
+    except:
+        return "File not found"
+
 if __name__ == '__main__':
     email = "raannakasturi@gmail.com"
     iDomains = "thenayankasturi.eu.org, www.thenayankasturi.eu.org, dash.thenayankasturi.eu.org"
     cfDomain = "silerudaagartha.eu.org"
     domains = getDomains(iDomains)
-    privFile, csrFile, tempPrivFile = genPrivCSR(email, domains)
+    challengeType = "dns"
+    privFile, csrFile, tempPrivateFile = genPrivCSR(email, domains)
     caServer = chooseCAserver("letsencrypt_test")
     cnameRecords = genCNAMERecs(domains)
     cnameValues = genCNAMEValues(domains, cfDomain)
     txtRecords = genTXTRecs(cnameValues, cfDomain)
+    txtValues = cnameValues
     for i in range(len(cnameRecords)):
         print(f"Add {cnameRecords[i]} with value {cnameValues[i]} to your DNS records\n")
-    #addToCF(txtRecords, txtValues, email)
-    #time.sleep(60) #change to 60 later
-    #delFromCF(txtRecords)
-    print(f"Private Key: {privFile}\nCSR: {csrFile}\nCA Server: {caServer}")
+    addToCF(txtRecords, txtValues, email)
+    loopend = True
+    while loopend:
+        loopend = True
+        for domain in domains:
+            stat, domain_status = VerifyDNS(domain)
+            print(stat)
+        #time.sleep(10)
+        loopend = input("Do you want to continue? (y/n): ")
+        if loopend == "y":
+            loopend = True
+            continue
+        else:
+            loopend = False
+            break
+    delFromCF(txtRecords)
+    challenges_info, auth, order, order_headers, acmeTXTRecs, acmeTXTValues = getTXT(tempPrivateFile, csrFile, challengeType, caServer, email)
+    addToCF(txtRecords, acmeTXTValues, email)
+    time.sleep(20) #change to 60 later
+    while True:
+        certFile, caFile = verifyTXT(tempPrivateFile, csrFile, challenges_info, auth, order, order_headers, caServer, email)
+        if checkCert(certFile) == "File not empty":
+            break
+        else:
+            time.sleep(20)
+            continue
+    delFromCF(txtRecords)
+    print(f"Private Key: {privFile}\nSSL Certificate: {certFile}\nCA Certificate: {caFile}")

@@ -15,6 +15,7 @@ headers = {
 }
 
 def checkTXT(TXTRecs):
+    print(CF_TOKEN, CF_ZONE_ID, CF_EMAIL_ID)
     cf_endpoint = f"zones/{CF_ZONE_ID}/dns_records"
     url = f"{CF_API}{cf_endpoint}"
     response = requests.request("GET", url, headers=headers)
@@ -44,6 +45,7 @@ def addTXT(TXTRec, TXTValue, SSLEmail):
         "comment": f"SSL Verification for {SSLEmail}"
     }
     response = requests.request("POST", url, headers=headers, json=data)
+    print(response.json())
     return response.json()
 
 def delTXT(TXTName):

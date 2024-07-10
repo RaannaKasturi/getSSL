@@ -3,19 +3,15 @@ import json
 import binascii
 import hashlib
 import re
+from urllib import response
 from urllib.request import urlopen
 from tools import cmd, b64, send_signed_request, poll_until_not
 
 __version__ = "0.3.0"
 
-CA_PRD = "https://acme-staging-v02.api.letsencrypt.org"
-CA_STG = "https://acme-staging-v02.api.letsencrypt.org"
-CA_DIR = None
-
 def get_directory(ca_url):
     global CA_DIR
-    if CA_DIR is None:
-        CA_DIR = json.loads(urlopen(ca_url + "/directory").read().decode("utf8"))
+    CA_DIR = json.loads(urlopen(ca_url).read().decode("utf8"))
     return CA_DIR
 
 def get_public_key(account_key):
@@ -55,13 +51,24 @@ def get_csr_domains(csr):
 
 def register_account(ca_url, account_key, email):
     print("Registering {0}...".format(email))
-    tos = (get_directory(ca_url)["meta"]["termsOfService"])
+
+    # Debugging: Print the directory content and type
+    directory = get_directory(ca_url)
+    print("Directory content:", directory)
+    print("Directory type:", type(directory))
+
+    try:
+        tos = directory["meta"]["termsOfService"]
+    except KeyError:
+        raise KeyError("The 'meta' or 'termsOfService' key is missing in the directory response.")
+
     print(f"By continuing you are agreeing to Issuer's Subscriber Agreement\n{tos}")
     reg = {"termsOfServiceAgreed": True}
-    nonce_url = get_directory(ca_url)["newNonce"]
+    nonce_url = directory["newNonce"]
     auth = {"jwk": get_public_key(account_key)}
     acct_headers = None
-    result, code, acct_headers = send_signed_request(get_directory(ca_url)["newAccount"], reg, nonce_url, auth, account_key, "Error registering")
+
+    result, code, acct_headers = send_signed_request(directory["newAccount"], reg, nonce_url, auth, account_key, "Error registering")
     if code == 201:
         print("Registered!")
     else:
@@ -71,6 +78,7 @@ def register_account(ca_url, account_key, email):
     ua_result, ua_code, ua_headers = send_signed_request(acct_headers["Location"], {"contact": ["mailto:{}".format(email)]}, nonce_url, auth, account_key, "Error updating account")
     print("Done")
     return auth
+
 
 def request_challenges(ca_url, auth, domains, account_key):
     print("Making new order for {0}...".format(", ".join(list(domains))))
@@ -108,6 +116,7 @@ def finalize_order(ca_url, auth, order, order_headers, csr, account_key):
     # Polling until the order status is not pending or processing
     order = poll_until_not(order_headers["Location"], ["pending", "processing"], get_directory(ca_url)["newNonce"], auth, account_key, "Error checking order status")
     # Check if the order status is already valid
+    print(f"Order status: {order['status']}")
     if order["status"] == "valid":
         print("Order is already valid. No need to finalize again.")
         return None
@@ -140,13 +149,14 @@ def finalize_order(ca_url, auth, order, order_headers, csr, account_key):
 
 def save_cert(data, email):
     certs = data.split('-----BEGIN CERTIFICATE-----\n')[1:]
+    caFile = f"{email.split('@')[0]}/CACertificate.pem"
+    certFile  = f"{email.split('@')[0]}/Certificate.pem"
     for i, cert in enumerate(certs, 1):
         # Preparing certificate content with BEGIN/END headers
         if i == 1:
-            file_name = "Certificate.pem"
+            file_name = certFile
         elif i == 2:
-            file_name = "CA Certificate.pem"
-        certFile = f"{email.split('@')[0]/(file_name)}"
+            file_name = caFile
         cert_content = f"-----BEGIN CERTIFICATE-----\n{cert.strip()}"
         # Writing to file
         file_name = f"certificate_{i}.pem"
@@ -155,53 +165,36 @@ def save_cert(data, email):
             f.write('\n')
         print(f"Certificate {i} has been written to {file_name}")
         print(f"Certificate saved to {certFile}")
+    return certFile, caFile
 
-def main():
-    parser = argparse.ArgumentParser(description='ACME client script.')
-    parser.add_argument('--account-key', required=True, help='Path to the account private key file.')
-    parser.add_argument('--csr', required=True, help='Path to the certificate signing request file.')
-    parser.add_argument('--email', required=True, help='Email address for registration.')
-    parser.add_argument('--ca', default=CA_STG, help='CA URL, default is LetsEncrypt staging.')
-    parser.add_argument('--dns', action='store_true', help='Use DNS-01 challenge instead of HTTP-01.')
-    args = parser.parse_args()
-
-    account_key = args.account_key
-    csr = args.csr
-    email = args.email
-    ca_url = args.ca
-    use_dns = args.dns
-
-    domains, common_name = get_csr_domains(csr)
-    auth = register_account(ca_url, account_key, email)
-    order, order_headers = request_challenges(ca_url, auth, domains, account_key)
-
-    if use_dns:
-        thumbprint = b64(hashlib.sha256(json.dumps(get_public_key(account_key), sort_keys=True, separators=(',', ':')).encode()).digest())
+def getTXT(tempPrivateFile, CSRFile, challengeType, server, email):
+    domains, common_name = get_csr_domains(CSRFile)
+    auth = register_account(server, tempPrivateFile, email)
+    order, order_headers = request_challenges(server, auth, domains, tempPrivateFile)
+    TXTRecs = []
+    TXTValues = []
+    if challengeType == "dns":
+        thumbprint = b64(hashlib.sha256(json.dumps(get_public_key(tempPrivateFile), sort_keys=True, separators=(',', ':')).encode()).digest())
         challenges_info = []
         for domain in domains:
-            challenges = dns_challenges(ca_url, auth, order, domain, thumbprint, account_key)
+            challenges = dns_challenges(server, auth, order, domain, thumbprint, tempPrivateFile)
             challenges_info.extend(challenges)
 
         for TXTRec, TXTValue, challenge_url in challenges_info:
-            print(f"Challenge for {TXTRec} is {TXTValue}")
-            print(f"Please update your DNS for '{TXTRec}' to have the following TXT record:")
-            print(f"{TXTRec}    IN    TXT ( \"{TXTValue}\" )\n")
-
-            input("Press Enter when the TXT record is updated on the DNS...")
-
-        for TXTRec, TXTValue, challenge_url in challenges_info:
-            success = dns_verification(ca_url, auth, challenge_url, account_key)
-            if not success:
-                print("DNS verification failed. Exiting.")
-                return
-
+            TXTRecs.append(TXTRec)
+            TXTValues.append(TXTValue)
     else:
         raise ValueError("Only DNS challenge supported in this script")
+    return challenges_info, auth, order, order_headers, TXTRecs, TXTValues
 
-    cert = finalize_order(ca_url, auth, order, order_headers, csr, account_key)
+def verifyTXT(tempPrivateFile, CSRFile, challenges_info, auth, order, order_headers, server, email):
+    for TXTRec, TXTValue, challenge_url in challenges_info:
+        success = dns_verification(server, auth, challenge_url, tempPrivateFile)
+        if not success:
+            print("DNS verification failed. Exiting.")
+    cert = finalize_order(server, auth, order, order_headers, CSRFile, tempPrivateFile)
     if cert:
-        save_cert(cert, email)
+        certFile, caFile = save_cert(cert, email)
+    return certFile, caFile
 
-if __name__ == "__main__":
-    main()
-    #python3 test.py --account-key raannakasturi/tempPrivate.pem --csr raannakasturi/domain.csr --email raannakasturi@gmail.com --dns
+#python3 test.py --account-key raannakasturi/tempPrivate.pem --csr raannakasturi/domain.csr --email raannakasturi@gmail.com --dns
