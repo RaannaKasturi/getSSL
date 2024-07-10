@@ -1,15 +1,10 @@
 import argparse
-import urllib.request
-import base64
 import json
-import subprocess
-import sys
 import binascii
-import time
 import hashlib
 import re
-from urllib.error import URLError
 from urllib.request import urlopen
+from tools import cmd, b64, send_signed_request, poll_until_not
 
 __version__ = "0.3.0"
 
@@ -22,95 +17,6 @@ def get_directory(ca_url):
     if CA_DIR is None:
         CA_DIR = json.loads(urlopen(ca_url + "/directory").read().decode("utf8"))
     return CA_DIR
-
-def cmd(cmd_list, stdin=None, cmd_input=None, err_msg="Command Line Error"):
-    "Runs external commands"
-    proc = subprocess.Popen(
-        cmd_list, stdin=stdin, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-    )
-    out, err = proc.communicate(cmd_input)
-    if proc.returncode != 0:
-        sys.stderr.write("{0}: {1}\n".format(err_msg, err.decode()))
-        sys.exit(1)
-    return out
-
-def b64(b):
-    if type(b) is str:
-        b = b.encode()
-    return base64.urlsafeb64encode(b).decode().replace("=", "")
-
-def do_request(url, data=None, err_msg="Error"):
-    try:
-        resp = urllib.request.urlopen(
-            urllib.request.Request(
-                url,
-                data=data,
-                headers={
-                    "Content-Type": "application/jose+json",
-                    "User-Agent": "acmens",
-                },
-            )
-        )
-        resp_data, code, headers = (
-            resp.read().decode("utf8"),
-            resp.getcode(),
-            resp.headers,
-        )
-    except URLError as e:
-        resp_data = e.read().decode("utf8") if hasattr(e, "read") else str(e)
-        code, headers = getattr(e, "code", None), {}
-    try:
-        resp_data = json.loads(resp_data)  # try to parse json results
-    except ValueError:
-        pass  # resp_data is not a JSON string; that's fine
-    return resp_data, code, headers
-
-def _mk_signed_req_body(url, payload, nonce, auth, account_key):
-    if len(nonce) < 1:
-        sys.stderr.write("_mk_signed_req_body: nonce invalid: {}".format(nonce))
-        sys.exit(1)
-
-    payload64 = "" if payload is None else b64(json.dumps(payload).encode("utf8"))
-    protected = {"url": url, "alg": "RS256", "nonce": nonce}
-    protected.update(auth)
-    protected64 = b64(json.dumps(protected).encode("utf8"))
-    protected_input = "{0}.{1}".format(protected64, payload64).encode("utf8")
-    out = cmd(
-        ["openssl", "dgst", "-sha256", "-sign", account_key],
-        stdin=subprocess.PIPE,
-        cmd_input=protected_input,
-        err_msg="OpenSSL Error",
-    )
-    return json.dumps(
-        {"protected": protected64, "payload": payload64, "signature": b64(out)}
-    )
-
-def _send_signed_request(url, payload, nonce_url, auth, account_key, err_msg):
-    """Make signed request to ACME endpoint"""
-    tried = 0
-    nonce = do_request(nonce_url)[2]["Replay-Nonce"]
-    while True:
-        data = _mk_signed_req_body(url, payload, nonce, auth, account_key)
-        resp_data, resp_code, headers = do_request(
-            url, data=data.encode("utf8"), err_msg=err_msg
-        )
-        if resp_code in [200, 201, 204]:
-            return resp_data, resp_code, headers
-        elif (
-            resp_code == 400
-            and resp_data.get("type", "") == "urn:ietf:params:acme:error:badNonce"
-            and tried < 100
-        ):
-            nonce = headers.get("Replay-Nonce", "")
-            tried += 1
-            continue
-        else:
-            sys.stderr.write(
-                "{0}:\nUrl: {1}\nData: {2}\nResponse Code: {3}\nResponse: {4}".format(
-                    err_msg, url, data, resp_code, resp_data
-                )
-            )
-            sys.exit(1)
 
 def get_public_key(account_key):
     print("Decoding private key...")
@@ -126,19 +32,6 @@ def get_public_key(account_key):
     jwk = {"e": pub_exp64, "kty": "RSA", "n": pub_mod64}
     print("Found public key!")
     return jwk
-
-def poll_until_not(url, pending_statuses, nonce_url, auth, account_key, err_msg):
-    result, t0, delay = None, time.time(), 5  # Increase initial delay to 5 seconds
-    while result is None or result["status"] in pending_statuses:
-        assert time.time() - t0 < 3600, "Polling timeout"  # 1 hour timeout
-        print(f"Checking order status: {result['status'] if result else 'None'}")
-        time.sleep(delay)
-        delay = min(delay * 2, 120)  # Increase the delay, up to a maximum of 120 seconds
-        result, _, _ = _send_signed_request(
-            url, None, nonce_url, auth, account_key, err_msg
-        )
-        print(f"Final order status: {result['status']}")
-    return result
 
 def get_csr_domains(csr):
     print("Reading csr file...")
@@ -168,14 +61,14 @@ def register_account(ca_url, account_key, email):
     nonce_url = get_directory(ca_url)["newNonce"]
     auth = {"jwk": get_public_key(account_key)}
     acct_headers = None
-    result, code, acct_headers = _send_signed_request(get_directory(ca_url)["newAccount"], reg, nonce_url, auth, account_key, "Error registering")
+    result, code, acct_headers = send_signed_request(get_directory(ca_url)["newAccount"], reg, nonce_url, auth, account_key, "Error registering")
     if code == 201:
         print("Registered!")
     else:
         print("Already registered!")
     auth = {"kid": acct_headers["Location"]}
     print("Updating account...")
-    ua_result, ua_code, ua_headers = _send_signed_request(acct_headers["Location"], {"contact": ["mailto:{}".format(email)]}, nonce_url, auth, account_key, "Error updating account")
+    ua_result, ua_code, ua_headers = send_signed_request(acct_headers["Location"], {"contact": ["mailto:{}".format(email)]}, nonce_url, auth, account_key, "Error updating account")
     print("Done")
     return auth
 
@@ -184,13 +77,13 @@ def request_challenges(ca_url, auth, domains, account_key):
     id = {"identifiers": []}
     for domain in domains:
         id["identifiers"].append({"type": "dns", "value": domain})
-    order, order_code, order_headers = _send_signed_request(get_directory(ca_url)["newOrder"], id, get_directory(ca_url)["newNonce"], auth, account_key, "Error creating new order")
+    order, order_code, order_headers = send_signed_request(get_directory(ca_url)["newOrder"], id, get_directory(ca_url)["newNonce"], auth, account_key, "Error creating new order")
     return order, order_headers
 
 def dns_challenges(ca_url, auth, order, domain, thumbprint, account_key):
     challenges_info = []
     for auth_url in order["authorizations"]:
-        authz_result, authz_code, authz_headers = _send_signed_request(auth_url, None, get_directory(ca_url)["newNonce"], auth, account_key, "Error getting authorization")
+        authz_result, authz_code, authz_headers = send_signed_request(auth_url, None, get_directory(ca_url)["newNonce"], auth, account_key, "Error getting authorization")
         challenge = next((c for c in authz_result["challenges"] if c["type"] == "dns-01" and authz_result["identifier"]["value"] == domain), None)
         if challenge:
             token = challenge["token"]
@@ -203,7 +96,7 @@ def dns_challenges(ca_url, auth, order, domain, thumbprint, account_key):
 
 def dns_verification(ca_url, auth, challenge_url, account_key):
     print("Requesting verification for {}...".format(challenge_url))
-    verification_result, verification_code, verification_headers = _send_signed_request(challenge_url, {}, get_directory(ca_url)["newNonce"], auth, account_key, "Error submitting challenge")
+    verification_result, verification_code, verification_headers = send_signed_request(challenge_url, {}, get_directory(ca_url)["newNonce"], auth, account_key, "Error submitting challenge")
     if verification_code != 200:
         print(f"Error submitting challenge:\nUrl: {challenge_url}\nData: {json.dumps(verification_result)}\nResponse Code: {verification_code}\nResponse: {verification_result}")
         return False
@@ -225,7 +118,7 @@ def finalize_order(ca_url, auth, order, order_headers, csr, account_key):
     # Converting CSR to DER format
     csr_der = cmd(["openssl", "req", "-in", csr, "-outform", "DER"], err_msg="DER Export Error")
     # Finalizing the order
-    fnlz_resp, fnlz_code, fnlz_headers = _send_signed_request(order["finalize"], {"csr": b64(csr_der)}, get_directory(ca_url)["newNonce"], auth, account_key, "Error finalizing order")
+    fnlz_resp, fnlz_code, fnlz_headers = send_signed_request(order["finalize"], {"csr": b64(csr_der)}, get_directory(ca_url)["newNonce"], auth, account_key, "Error finalizing order")
     print(f"Finalize response code: {fnlz_code}")
     print(f"Finalize response: {fnlz_resp}")
     if fnlz_code != 200:
@@ -237,7 +130,7 @@ def finalize_order(ca_url, auth, order, order_headers, csr, account_key):
     else:
         raise ValueError("Order finalization failed")
     # Getting the certificate
-    cert_resp, cert_code, cert_headers = _send_signed_request(order["certificate"], None, get_directory(ca_url)["newNonce"], auth, account_key, "Error getting certificate")
+    cert_resp, cert_code, cert_headers = send_signed_request(order["certificate"], None, get_directory(ca_url)["newNonce"], auth, account_key, "Error getting certificate")
     print(f"Certificate response code: {cert_code}")
     print(f"Certificate response: {cert_resp}")
     if cert_code != 200:
