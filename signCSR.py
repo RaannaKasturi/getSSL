@@ -52,9 +52,6 @@ def register_account(ca_url, account_key, email):
 
     # Debugging: Print the directory content and type
     directory = get_directory(ca_url)
-    print("Directory content:", directory)
-    print("Directory type:", type(directory))
-
     try:
         tos = directory["meta"]["termsOfService"]
     except KeyError:
@@ -159,13 +156,10 @@ def save_cert(data, email):
         elif i == 2:
             file_name = caFile
         cert_content = f"-----BEGIN CERTIFICATE-----\n{cert.strip()}"
-        # Writing to file
-        file_name = f"certificate_{i}.pem"
         with open(file_name, 'w') as f:
             f.write(cert_content)
             f.write('\n')
         print(f"Certificate {i} has been written to {file_name}")
-        print(f"Certificate saved to {certFile}")
     return certFile, caFile
 
 def getTXT(tempPrivateFile, CSRFile, challengeType, server, email):
@@ -199,7 +193,7 @@ def verifyTXT(tempPrivateFile, CSRFile, challenges_info, auth, order, order_head
             print("DNS verification failed for {}. Exiting.".format(challenge_url))
             return None, None
         else:
-            print(f"DNS verification successful for {challenge_url}---------------------------------------------------------------------------")
+            print(f"DNS verification successful for {challenge_url}")
             continue
     cert = finalize_order(server, auth, order, order_headers, CSRFile, tempPrivateFile)
     if cert:

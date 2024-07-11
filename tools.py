@@ -23,12 +23,13 @@ def cmd(cmd_list, stdin=None, cmd_input=None, err_msg="Command Line Error"):
         sys.stderr.write("{0}: {1}\n".format(err_msg, err.decode()))
         sys.exit(1)
     return out
-"""
+
 def b64(b):
+    "Convert bytes to JWT base64 string"
     if type(b) is str:
         b = b.encode()
-    return base64.urlsafe_b64decode(b).decode().replace("=", "")
-"""
+    return base64.urlsafe_b64encode(b).decode().replace("=", "")
+
 def do_request(url, data=None, err_msg="Error"):
     try:
         resp = urllib.request.urlopen(

@@ -53,10 +53,9 @@ def genCNAMERecs(domains):
         CNAMERecs.append(CNAMERec)
     return CNAMERecs
 
-def genCNAMEValues(domains, cfDomain):
+def genCNAMEValues(domains, cfDomain, exchange):
     tempCNAMEValues = []
     CNAMEValues = []
-    subdomains, exchange = extractSubDomains(domains)
     for domain in domains:
         CNAMEValue = prefix(domain)
         CNAMEValue = f"{CNAMEValue}.{domain}"
@@ -77,7 +76,7 @@ def addToCF(txtRecords, txtValues, email):
     try:
         print(f"Adding {txtRecords} with value {txtValues} to your DNS records")
         TXTRec = f""
-        addTXT(txtRecords.strip(), txtValues.strip(), email)
+        addTXT(txtRecords, txtValues, email)
         return "TXT records added successfully"
     except:
         return "error adding TXT records"
@@ -99,28 +98,37 @@ def checkCert(file_path):
         with open(file_path, 'r') as file:
             content = file.read()
             if content:
-                return "File not empty"
+                return True
             else:
-                return "File empty"
+                return False
     except:
         return "File not found"
+    
+def TXTRec(txtRecords, exchange):
+    txtRecord = txtRecords.replace("_acme-challenge.", "")
+    txtRec = txtRecord.replace(f"{exchange}", "")
+    pre = prefix(txtRecord)
+    rec = f"{pre}.{txtRec}"
+    rec = rec.strip(".")
+    return rec
 
 if __name__ == '__main__':
     email = "raannakasturi@gmail.com"
     iDomains = "thenayankasturi.eu.org, www.thenayankasturi.eu.org, dash.thenayankasturi.eu.org"
     cfDomain = "silerudaagartha.eu.org"
     domains = getDomains(iDomains)
+    subdomains, exchange = extractSubDomains(domains)
     challengeType = "dns"
     privFile, csrFile, tempPrivateFile = genPrivCSR(email, domains)
     caServer = chooseCAserver("letsencrypt_test")
     cnameRecords = genCNAMERecs(domains)
-    cnameValues = genCNAMEValues(domains, cfDomain)
+    cnameValues = genCNAMEValues(domains, cfDomain, exchange)
     txtRecords = genTXTRecs(cnameValues, cfDomain)
+    """
     txtValues = cnameValues
     for i in range(len(cnameRecords)):
         print(f"Add {cnameRecords[i]} with value {cnameValues[i]} to your DNS records\n")
     #addToCF(txtRecords, txtValues, email)
-    """
     loopend = True
     while loopend:
         loopend = True
@@ -138,16 +146,20 @@ if __name__ == '__main__':
         """
     delFromCF(txtRecords)
     challenges_info, auth, order, order_headers, acmeTXTRecs, acmeTXTValues = getTXT(tempPrivateFile, csrFile, challengeType, caServer, email)
-    print(challenges_info)
     for txtRecords, acmeTXTValues, _ in challenges_info:
-        addToCF(txtRecords, acmeTXTValues, email)
+        TXTRRec = TXTRec(txtRecords, exchange)
+        addToCF(TXTRRec, acmeTXTValues, email)
     time.sleep(20) #change to 60 later
     while True:
         certFile, caFile = verifyTXT(tempPrivateFile, csrFile, challenges_info, auth, order, order_headers, caServer, email)
-        if checkCert(certFile) == "File not empty":
+        if checkCert(certFile):
             break
         else:
             time.sleep(20)
             continue
-    delFromCF(txtRecords)
+    try:
+        delFromCF(txtRecords)
+        print("TXT records deleted successfully")
+    except:
+        print("error deleting TXT records")
     print(f"Private Key: {privFile}\nSSL Certificate: {certFile}\nCA Certificate: {caFile}")

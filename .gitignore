@@ -1,4 +1,4 @@
 .env
 certificate*
 /raannakasturi
-/admin
+/__pycache__
