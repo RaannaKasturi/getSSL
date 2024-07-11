@@ -6,10 +6,10 @@ import sys
 import time
 import urllib.request
 
-from urllib.request import urlopen
 from urllib.error import URLError
 
 from acmens import _b64 as b64
+import dns.resolver
 
 
 
@@ -114,3 +114,36 @@ def poll_until_not(url, pending_statuses, nonce_url, auth, account_key, err_msg)
         )
         print(f"Final order status: {result['status']}")
     return result
+
+def get_cname_target(domain):
+    try:
+        answers = dns.resolver.resolve(domain, 'CNAME')
+        for rdata in answers:
+            return str(rdata.target).rstrip('.')
+    except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN):
+        return None
+
+
+def get_txt_record(domain):
+    try:
+        answers = dns.resolver.resolve(domain, 'TXT')
+        for rdata in answers:
+            return rdata.to_text().strip('"')
+    except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN):
+        return None
+
+def check_txt_records(domain, expected_value):
+    cname_target = get_cname_target(domain)
+    if cname_target:
+        txt_value = get_txt_record(cname_target)
+        print(f"TXT value: {txt_value}")
+        print(f"Expected value: {expected_value}")
+        if txt_value == expected_value:
+            return True
+    else:
+        txt_value = get_txt_record(domain)
+        print(f"TXT value: {txt_value}")
+        print(f"Expected value: {expected_value}")
+        if txt_value == expected_value:
+            return True
+    return False

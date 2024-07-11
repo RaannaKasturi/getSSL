@@ -1,0 +1,15 @@
+Adding _acme-challenge.thenayankasturi.eu.org with value zGQgudth3_4bBkFSBsjkKRnnKtacj0t-1NyFl6rTFew to your DNS records
+Adding _acme-challenge.www.thenayankasturi.eu.org with value 9pMX_-iBllY0QsNYH12Pd2pcn5Q9rfnocaCPutiN0Zc to your DNS records
+Adding _acme-challenge.dash.thenayankasturi.eu.org with value IVxci42Iz8ZBztyGRap-ZyruOpLELSpRwevSMahIg54 to your DNS records
+TXT value: -ridFrRVUTohKabjPmFHix9TLcmqbuNKnuaFsjichfA
+Expected value: zGQgudth3_4bBkFSBsjkKRnnKtacj0t-1NyFl6rTFew
+DNS verification failed for _acme-challenge.dash.thenayankasturi.eu.org. Exiting.
+TXT value: -ridFrRVUTohKabjPmFHix9TLcmqbuNKnuaFsjichfA
+Expected value: zGQgudth3_4bBkFSBsjkKRnnKtacj0t-1NyFl6rTFew
+DNS verification failed for _acme-challenge.dash.thenayankasturi.eu.org. Exiting.
+TXT value: IVxci42Iz8ZBztyGRap-ZyruOpLELSpRwevSMahIg54
+Expected value: zGQgudth3_4bBkFSBsjkKRnnKtacj0t-1NyFl6rTFew
+DNS verification failed for _acme-challenge.dash.thenayankasturi.eu.org. Exiting.
+TXT value: -ridFrRVUTohKabjPmFHix9TLcmqbuNKnuaFsjichfA
+Expected value: zGQgudth3_4bBkFSBsjkKRnnKtacj0t-1NyFl6rTFew
+DNS verification failed for _acme-challenge.dash.thenayankasturi.eu.org. Exiting.

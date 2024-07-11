@@ -33,20 +33,20 @@ def checkTXT(TXTRecs):
     return recordIDs, recordNames
         
 def addTXT(TXTRec, TXTValue, SSLEmail):
-    cf_endpoint = f"zones/{CF_ZONE_ID}/dns_records"
-    url = f"{CF_API}{cf_endpoint}"
-    name = TXTRec
-    data = {
-        "type": "TXT",
-        "name": name,
-        "content": TXTValue,
-        "ttl": 1,
-        "proxied": False,
-        "comment": f"SSL Verification for {SSLEmail}"
-    }
-    response = requests.request("POST", url, headers=headers, json=data)
-    print(response.json())
-    return response.json()
+    for i in range(len(TXTRec)):
+        cf_endpoint = f"zones/{CF_ZONE_ID}/dns_records"
+        url = f"{CF_API}{cf_endpoint}"
+        name = TXTRec[i]
+        data = {
+            "type": "TXT",
+            "name": name,
+            "content": TXTValue[i],
+            "ttl": 1,
+            "proxied": False,
+            "comment": f"SSL Verification for {SSLEmail}"
+        }
+        response = requests.request("POST", url, headers=headers, json=data)
+        return response.json()
 
 def delTXT(TXTName):
     recordIDs, recordNames = checkTXT(TXTName)

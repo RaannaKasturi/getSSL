@@ -75,9 +75,9 @@ def genTXTRecs(CNAMEValues, cfDomain):
 
 def addToCF(txtRecords, txtValues, email):
     try:
-        for i in range(len(txtRecords)):
-            print(f"Adding {txtRecords[i]} with value {txtValues[i]} to your DNS records")
-            addTXT(txtRecords[i].strip(), txtValues[i].strip(), email)
+        print(f"Adding {txtRecords} with value {txtValues} to your DNS records")
+        TXTRec = f""
+        addTXT(txtRecords.strip(), txtValues.strip(), email)
         return "TXT records added successfully"
     except:
         return "error adding TXT records"
@@ -119,7 +119,8 @@ if __name__ == '__main__':
     txtValues = cnameValues
     for i in range(len(cnameRecords)):
         print(f"Add {cnameRecords[i]} with value {cnameValues[i]} to your DNS records\n")
-    addToCF(txtRecords, txtValues, email)
+    #addToCF(txtRecords, txtValues, email)
+    """
     loopend = True
     while loopend:
         loopend = True
@@ -134,9 +135,12 @@ if __name__ == '__main__':
         else:
             loopend = False
             break
+        """
     delFromCF(txtRecords)
     challenges_info, auth, order, order_headers, acmeTXTRecs, acmeTXTValues = getTXT(tempPrivateFile, csrFile, challengeType, caServer, email)
-    addToCF(txtRecords, acmeTXTValues, email)
+    print(challenges_info)
+    for txtRecords, acmeTXTValues, _ in challenges_info:
+        addToCF(txtRecords, acmeTXTValues, email)
     time.sleep(20) #change to 60 later
     while True:
         certFile, caFile = verifyTXT(tempPrivateFile, csrFile, challenges_info, auth, order, order_headers, caServer, email)

@@ -1,11 +1,9 @@
-import argparse
 import json
 import binascii
 import hashlib
 import re
-from urllib import response
 from urllib.request import urlopen
-from tools import cmd, b64, send_signed_request, poll_until_not
+from tools import cmd, b64, send_signed_request, poll_until_not, check_txt_records
 
 __version__ = "0.3.0"
 
@@ -91,7 +89,8 @@ def request_challenges(ca_url, auth, domains, account_key):
 def dns_challenges(ca_url, auth, order, domain, thumbprint, account_key):
     challenges_info = []
     for auth_url in order["authorizations"]:
-        authz_result, authz_code, authz_headers = send_signed_request(auth_url, None, get_directory(ca_url)["newNonce"], auth, account_key, "Error getting authorization")
+        authz_result, authz_code, authz_headers = send_signed_request(
+            auth_url, None, get_directory(ca_url)["newNonce"], auth, account_key, "Error getting authorization")
         challenge = next((c for c in authz_result["challenges"] if c["type"] == "dns-01" and authz_result["identifier"]["value"] == domain), None)
         if challenge:
             token = challenge["token"]
@@ -102,9 +101,11 @@ def dns_challenges(ca_url, auth, order, domain, thumbprint, account_key):
             challenges_info.append((TXTRec, TXTValue, challenge["url"]))
     return challenges_info
 
+
 def dns_verification(ca_url, auth, challenge_url, account_key):
     print("Requesting verification for {}...".format(challenge_url))
-    verification_result, verification_code, verification_headers = send_signed_request(challenge_url, {}, get_directory(ca_url)["newNonce"], auth, account_key, "Error submitting challenge")
+    verification_result, verification_code, verification_headers = send_signed_request(
+        challenge_url, {}, get_directory(ca_url)["newNonce"], auth, account_key, "Error submitting challenge")
     if verification_code != 200:
         print(f"Error submitting challenge:\nUrl: {challenge_url}\nData: {json.dumps(verification_result)}\nResponse Code: {verification_code}\nResponse: {verification_result}")
         return False
@@ -189,9 +190,17 @@ def getTXT(tempPrivateFile, CSRFile, challengeType, server, email):
 
 def verifyTXT(tempPrivateFile, CSRFile, challenges_info, auth, order, order_headers, server, email):
     for TXTRec, TXTValue, challenge_url in challenges_info:
-        success = dns_verification(server, auth, challenge_url, tempPrivateFile)
+        success = check_txt_records(TXTRec, TXTValue)
         if not success:
-            print("DNS verification failed. Exiting.")
+            print("DNS verification failed for {}. Exiting.".format(TXTRec))
+            return None, None
+        dns_success = dns_verification(server, auth, challenge_url, tempPrivateFile)
+        if not dns_success:
+            print("DNS verification failed for {}. Exiting.".format(challenge_url))
+            return None, None
+        else:
+            print(f"DNS verification successful for {challenge_url}---------------------------------------------------------------------------")
+            continue
     cert = finalize_order(server, auth, order, order_headers, CSRFile, tempPrivateFile)
     if cert:
         certFile, caFile = save_cert(cert, email)
