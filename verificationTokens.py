@@ -1,6 +1,5 @@
 from acme import errors, challenges
 
-
 def challens(order, directory) -> dict:
     challs = {}
     for auth in list(order.authorizations):
