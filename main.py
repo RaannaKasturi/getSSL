@@ -1,19 +1,13 @@
+import os
 import sys
 import josepy as jose
+
+from dotenv import load_dotenv
 from acme import client, messages
 from cryptography.hazmat.primitives.asymmetric import rsa, ec
 from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import serialization
 from genPVTCSR import genPVTCSR
 from verificationTokens import getTokens, verifyTokens
-
-
-DOMAINS = ['thenayankasturi.eu.org', 'www.thenayankasturi.eu.org', 'dash.thenayankasturi.eu.org']
-DIRECTORY = "https://acme-staging-v02.api.letsencrypt.org/directory"
-EMAIL = "raannakasturi@mail.com"
-KEYTYPE = "ec"
-KEYCURVE = "ec256"
-KEYSIZE = None
 
 def pgclient(directory, keyType="rsa", keySize=None, keyCurve=None):
     try:
@@ -48,14 +42,60 @@ def pgclient(directory, keyType="rsa", keySize=None, keyCurve=None):
         print("Error in initialization")
         sys.exit()
 
-def newAccount(pgclient, email):
-    registration = messages.NewRegistration.from_data(email=email, terms_of_service_agreed=True)
+from acme import messages, jose
+
+def newAccount(pgclient, email, kid=None, hmac=None):
+    # Prepare the external account binding if KID and HMAC are provided
+    external_account_binding = None
+    if kid and hmac:
+        # Debugging: Check the type and value of hmac
+        print(f"Original hmac: {hmac}, Type: {type(hmac)}")
+        
+        # Ensure hmac is a string
+        if isinstance(hmac, bytes):
+            hmac = hmac.decode('utf-8')  # Decode bytes to string if necessary
+            print(f"Decoded hmac: {hmac}, Type: {type(hmac)}")
+        
+        # Check if hmac is still not a string
+        if not isinstance(hmac, str):
+            print("Error: HMAC is not a string after decoding.")
+            return False
+
+        # Create the JWK object from the HMAC key
+        try:
+            hmac_bytes = jose.b64.b64decode(hmac)  # Decode base64 to bytes
+            print(f"HMAC bytes: {hmac_bytes}, Type: {type(hmac_bytes)}")
+            hmac_key = jose.jwk.JWKOct(key=hmac_bytes)
+        except Exception as e:
+            print(f"Error decoding HMAC key: {e}")
+            return False
+
+        # Ensure the hmac_key is encoded back to a base64 string
+        hmac_key_b64 = jose.b64.b64encode(hmac_bytes).decode('utf-8')
+
+        # Create the external account binding using the from_data class method
+        external_account_binding = messages.ExternalAccountBinding.from_data(
+            account_public_key=pgclient.net.key,
+            kid=kid,
+            hmac_key=hmac_key_b64,
+            directory=pgclient.directory
+        )
+
+    # Create the registration object
+    registration = messages.NewRegistration.from_data(
+        email=email,
+        terms_of_service_agreed=True,
+        external_account_binding=external_account_binding
+    )
+
     try:
         account = pgclient.new_account(registration)
         return account
     except Exception as e:
+        print(f"Error creating account: {e}")
         return False
-    
+
+
 def write(filename, data):
     try:
         with open(filename, 'wb') as f:
@@ -65,11 +105,11 @@ def write(filename, data):
         print("Error writing file: ", filename)
         print(e)
 
-def test(domains, email, keyType, keySize=None, keyCurve=None):
+def test(domains, email, keyType, keySize=None, keyCurve=None, kid=None, hmac=None):
     pgkclient = pgclient(DIRECTORY, keyType=keyType, keySize=keySize, keyCurve=keyCurve)
     if pgkclient is None:
         exit()
-    account = newAccount(pgkclient, EMAIL)
+    account = newAccount(pgkclient, EMAIL, kid=kid, hmac=hmac)
     if not account:
         exit()
     private_key, csr = genPVTCSR(domains=domains, email=email, keyType=keyType, keyCurve=keyCurve, keySize=keySize)
@@ -87,4 +127,16 @@ def test(domains, email, keyType, keySize=None, keyCurve=None):
     write("cert.pem", cert)
 
 if __name__ == "__main__":
-    test(DOMAINS, EMAIL, KEYTYPE, KEYCURVE)
+    load_dotenv()
+    DOMAINS = ['thenayankasturi.eu.org', 'www.thenayankasturi.eu.org', 'dash.thenayankasturi.eu.org']
+    DIRECTORY = "https://dv.acme-v02.test-api.pki.goog/directory" #"https://acme-staging-v02.api.letsencrypt.org/directory"
+    EMAIL = "raannakasturi@mail.com"
+    KEYTYPE = "ec"
+    KEYCURVE = "ec256"
+    KEYSIZE = None
+    KID = os.getenv("KID")
+    HMAC = os.getenv('HMAC')
+    print(KID)
+    print(HMAC)
+    sys.exit(1)
+    test(domains=DOMAINS, email=EMAIL, keyType=KEYTYPE, keySize=KEYSIZE,keyCurve=KEYCURVE, kid=KID, hmac=HMAC)

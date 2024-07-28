@@ -34,19 +34,14 @@ def verifyTokens(client, challs, order):
     answers = []
     responses = {}
     for domain, challenge_list in challs.items():
-        print(f"Processing challenges for domain: {domain}")
+        print(f"Fetching challenges for domain: {domain}")
         for challenge in challenge_list:
-            print(f"Challenge type: {challenge.chall.typ}")
             try:
                 response, validation = challenge.response_and_validation(client.net.key)
             except Exception as e:
                 print(f"Error generating response for challenge: {e}")
                 continue
-            print(f"Response: {response}")
-            # Ensure responses is properly populated
             token = challenge.chall.token
-            print(f"Raw token bytes: {token}, Type: {type(token)}")
-            # Check if token is in bytes and decode safely
             if isinstance(token, bytes):
                 try:
                     token = token.decode('utf-8', errors='replace')  # Use 'replace' to handle invalid bytes
