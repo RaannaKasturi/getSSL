@@ -1,58 +1,87 @@
-# Copyright 2023 Jared Hendrickson
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
-import time
-import simple_acme_dns
 import sys
+import josepy as jose
+from acme import client, messages
+from cryptography.hazmat.primitives.asymmetric import rsa, ec
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
+from genPVTCSR import genPVTCSR
+from verificationTokens import getTokens, verifyTokens
 
-verbose = True if "--verbose" in sys.argv else False
 
-# Create a client object to interface with the ACME server. In this example, the Let's Encrypt staging environment.
-client = simple_acme_dns.ACMEClient(
-    domains=["*.thenayankasturi.eu.org"],
-    email="user@jaredhendrickson.com",
-    directory="https://acme-staging-v02.api.letsencrypt.org/directory",
-    nameservers=["8.8.8.8", "1.1.1.1"]
-)
+DOMAINS = ['thenayankasturi.eu.org', 'www.thenayankasturi.eu.org', 'dash.thenayankasturi.eu.org']
+DIRECTORY = "https://acme-staging-v02.api.letsencrypt.org/directory"
+EMAIL = "raannakasturi@mail.com"
+KEYTYPE = "ec"
+KEYCURVE = "ec256"
+KEYSIZE = None
 
-# Manually enroll a new account
-client.new_account()
+def pgclient(directory, keyType="rsa", keySize=None, keyCurve=None):
+    try:
+        if keyType.lower() == "rsa":
+            if keySize == "" or keySize ==  None:
+                keySize = 4096
+            rsa_key = rsa.generate_private_key(public_exponent=65537, key_size=keySize, backend=default_backend())
+            account_key = jose.JWKRSA(key=rsa_key)
+            net = client.ClientNetwork(account_key, user_agent='simple_acme_dns/v2')
+            directory_obj = messages.Directory.from_json(net.get(directory).json())
+            acme_client = client.ClientV2(directory_obj, net=net)
+            return acme_client
+        elif keyType.lower() == "ec":
+            if keyCurve == "" or keyCurve == None:
+                keyCurve = "ec256"
+            if keyCurve == 'SECP256R1' or keyCurve == 'ec256':
+                ec_key = ec.generate_private_key(ec.SECP256R1(), default_backend())
+                algo=jose.ES256
+            elif keyCurve == 'SECP384R1' or keyCurve == 'ec384':
+                ec_key = ec.generate_private_key(ec.SECP384R1(), default_backend())
+                algo=jose.ES384
+            account_key = jose.JWKEC(key=ec_key)
+            net = client.ClientNetwork(account_key, alg=algo, user_agent='project-gatekeeper/v2')
+            response = net.get(directory)
+            directory_obj = messages.Directory.from_json(response.json())
+            acme_client = client.ClientV2(directory_obj, net=net)
+            return acme_client
+    except:
+        print("Error in initialization")
+        sys.exit()
 
-# Create a new RSA private key and CSR
-client.generate_private_key_and_csr(key_type="ec256")
+def newAccount(pgclient, email):
+    registration = messages.NewRegistration.from_data(email=email, terms_of_service_agreed=True)
+    try:
+        account = pgclient.new_account(registration)
+        return account
+    except Exception as e:
+        return False
+    
+def write(filename, data):
+    try:
+        with open(filename, 'wb') as f:
+            f.write(data)
+        print(filename, " successfully written")
+    except Exception as e:
+        print("Error writing file: ", filename)
+        print(e)
 
-# Request the verification token for our domains. Print each challenge FQDN and it's corresponding token.
-for domain, tokens in client.request_verification_tokens().items():
-    print(f"{ domain } -> {tokens}")
+def test(domains, email, keyType, keySize=None, keyCurve=None):
+    pgkclient = pgclient(DIRECTORY, keyType=keyType, keySize=keySize, keyCurve=keyCurve)
+    if pgkclient is None:
+        exit()
+    account = newAccount(pgkclient, EMAIL)
+    if not account:
+        exit()
+    private_key, csr = genPVTCSR(domains=domains, email=email, keyType=keyType, keyCurve=keyCurve, keySize=keySize)
+    verification_tokens, challs, order = getTokens(pgkclient, csr, DIRECTORY)
+    print(verification_tokens)
+    while True:
+        proceed = input("Proceed? y/n")
+        if proceed.lower() == 'y':
+            break
+        elif proceed.lower() == 'n':
+            continue
+    cert = verifyTokens(pgkclient, challs, order)
+    write("private.pem", private_key)
+    write("domain.csr", csr)
+    write("cert.pem", cert)
 
-for i in range(60):
-    print(f"waiting for DNS Propagation...{60-(i+1)}", end="\r")
-    time.sleep(1)
-    done = True
-
-# [ !!! ADD YOUR CODE TO UPLOAD THE TOKEN TO YOUR DNS SERVER HERE; OR UPLOAD THE TOKEN MANUALLY !!! ]
-
-# Start waiting for DNS propagation before requesting the certificate
-# Keep checking DNS for the verification token for 1200 seconds (10 minutes) before giving up.
-# If a DNS query returns the matching verification token, request the certificate. Otherwise, deactivate the account.
-if done:
-    client.request_certificate()
-else:
-    client.deactivate_account()
-    print("Failed to issue certificate for " + str(client.domains))
-    exit(1)
-
-print(client.certificate.decode())
-print(client.private_key.decode())
-
+if __name__ == "__main__":
+    test(DOMAINS, EMAIL, KEYTYPE, KEYCURVE)
