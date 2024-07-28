@@ -11,8 +11,8 @@ from verificationTokens import verificationTokens
 DOMAINS = ['thenayankasturi.eu.org', 'www.thenayankasturi.eu.org', 'dash.thenayankasturi.eu.org']
 DIRECTORY = "https://acme-staging-v02.api.letsencrypt.org/directory"
 EMAIL = "raannakasturi@mail.com"
-KEYTYPE = "rsa"
-KEYCURVE = "4096"
+KEYTYPE = "ec"
+KEYCURVE = "ec256"
 KEYSIZE = None
 
 def pgclient(directory, keyType="rsa", keySize=None, keyCurve=None):
