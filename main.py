@@ -1,165 +1,58 @@
-import hashlib
+# Copyright 2023 Jared Hendrickson
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import time
+import simple_acme_dns
+import sys
 
-from verifyDNS import VerifyDNS
-from genPrivCSR import genPrivCSR
-from dnsCF import addTXT, delTXT
-from signCSR import getTXT, verifyTXT
+verbose = True if "--verbose" in sys.argv else False
 
-def getDomains(iDomains):
-    domains = []
-    for domain in iDomains.split(","):
-        domain = domain.strip()
-        domains.append(domain)
-    return domains
+# Create a client object to interface with the ACME server. In this example, the Let's Encrypt staging environment.
+client = simple_acme_dns.ACMEClient(
+    domains=["*.thenayankasturi.eu.org"],
+    email="user@jaredhendrickson.com",
+    directory="https://acme-staging-v02.api.letsencrypt.org/directory",
+    nameservers=["8.8.8.8", "1.1.1.1"]
+)
 
-def chooseCAserver(provider):
-    if provider == "letsencrypt":
-        return "https://acme-v02.api.letsencrypt.org/directory"
-    elif provider == "letsencrypt_test":
-        return "https://acme-staging-v02.api.letsencrypt.org/directory"
-    elif provider == "buypass":
-        return "https://api.buypass.com/acme/directory"
-    elif provider == "buypass_test":
-        return "https://api.test4.buypass.no/acme/directory"
-    elif provider == "zerossl":
-        return "https://acme.zerossl.com/v2/DV90"
-    elif provider == "sslcomRSA":
-        return "https://acme.ssl.com/sslcom-dv-rsa"
-    elif provider == "sslcomECC":
-        return "https://acme.ssl.com/sslcom-dv-ecc"
-    elif provider == "google":
-        return "https://dv.acme-v02.api.pki.goog/directory"
-    elif provider == "googletest":
-        return "https://dv.acme-v02.test-api.pki.goog/directory"
-    else:
-        print("Invalid provider.")
-        return None
+# Manually enroll a new account
+client.new_account()
 
-def prefix(domain):
-    domain_bytes = domain.encode()
-    prefix = hashlib.blake2b(domain_bytes, digest_size=12).hexdigest()
-    return prefix
+# Create a new RSA private key and CSR
+client.generate_private_key_and_csr(key_type="ec256")
 
-def extractSubDomains(domains):
-    smallest_string = min(domains, key=len)
-    result = [domain.replace(smallest_string, '').replace('.', '') for domain in domains]
-    return result, smallest_string
+# Request the verification token for our domains. Print each challenge FQDN and it's corresponding token.
+for domain, tokens in client.request_verification_tokens().items():
+    print(f"{ domain } -> {tokens}")
 
-def genCNAMERecs(domains):
-    CNAMERecs = []
-    for domain in domains:
-        CNAMERec = f"_acme-challenge.{domain}"
-        CNAMERecs.append(CNAMERec)
-    return CNAMERecs
+for i in range(60):
+    print(f"waiting for DNS Propagation...{60-(i+1)}", end="\r")
+    time.sleep(1)
+    done = True
 
-def genCNAMEValues(domains, cfDomain, exchange):
-    tempCNAMEValues = []
-    CNAMEValues = []
-    for domain in domains:
-        CNAMEValue = prefix(domain)
-        CNAMEValue = f"{CNAMEValue}.{domain}"
-        tempCNAMEValues.append(CNAMEValue)
-    for CNAMEValue in tempCNAMEValues:
-        modified_CNAMEValue = CNAMEValue.replace(exchange, cfDomain)
-        CNAMEValues.append(modified_CNAMEValue)
-    return CNAMEValues
+# [ !!! ADD YOUR CODE TO UPLOAD THE TOKEN TO YOUR DNS SERVER HERE; OR UPLOAD THE TOKEN MANUALLY !!! ]
 
-def genTXTRecs(CNAMEValues, cfDomain):
-    TXTRecs = []
-    for CNAMEValue in CNAMEValues:
-        TXTRec = CNAMEValue.replace(f".{cfDomain}", "")
-        TXTRecs.append(TXTRec)
-    return TXTRecs
+# Start waiting for DNS propagation before requesting the certificate
+# Keep checking DNS for the verification token for 1200 seconds (10 minutes) before giving up.
+# If a DNS query returns the matching verification token, request the certificate. Otherwise, deactivate the account.
+if done:
+    client.request_certificate()
+else:
+    client.deactivate_account()
+    print("Failed to issue certificate for " + str(client.domains))
+    exit(1)
 
-def addToCF(txtRecords, txtValues, email):
-    try:
-        print(f"Adding {txtRecords} with value {txtValues} to your DNS records")
-        TXTRec = f""
-        addTXT(txtRecords, txtValues, email)
-        return "TXT records added successfully"
-    except:
-        return "error adding TXT records"
-    
-def delFromCF(txtRecords):
-    try:
-        for txtRecord in txtRecords:
-            status = delTXT(txtRecord)
-            if status:
-                stmt = f"TXT records deleted successfully"
-            else:
-                stmt = f"TXT records not found"
-    except:
-        stmt = "error deleting TXT records"
-    return stmt
+print(client.certificate.decode())
+print(client.private_key.decode())
 
-def checkCert(file_path):
-    try:
-        with open(file_path, 'r') as file:
-            content = file.read()
-            if content:
-                return True
-            else:
-                return False
-    except:
-        return "File not found"
-    
-def TXTRec(txtRecords, exchange):
-    txtRecord = txtRecords.replace("_acme-challenge.", "")
-    txtRec = txtRecord.replace(f"{exchange}", "")
-    pre = prefix(txtRecord)
-    rec = f"{pre}.{txtRec}"
-    rec = rec.strip(".")
-    return rec
-
-if __name__ == '__main__':
-    email = "raannakasturi@gmail.com"
-    iDomains = "thenayankasturi.eu.org, www.thenayankasturi.eu.org, dash.thenayankasturi.eu.org"
-    cfDomain = "silerudaagartha.eu.org"
-    domains = getDomains(iDomains)
-    subdomains, exchange = extractSubDomains(domains)
-    challengeType = "dns"
-    privFile, csrFile, tempPrivateFile = genPrivCSR(email, domains)
-    caServer = chooseCAserver("letsencrypt_test")
-    cnameRecords = genCNAMERecs(domains)
-    cnameValues = genCNAMEValues(domains, cfDomain, exchange)
-    txtRecords = genTXTRecs(cnameValues, cfDomain)
-    """
-    txtValues = cnameValues
-    for i in range(len(cnameRecords)):
-        print(f"Add {cnameRecords[i]} with value {cnameValues[i]} to your DNS records\n")
-    #addToCF(txtRecords, txtValues, email)
-    loopend = True
-    while loopend:
-        loopend = True
-        for domain in domains:
-            stat, domain_status = VerifyDNS(domain)
-            print(stat)
-        #time.sleep(10)
-        loopend = input("Do you want to continue? (y/n): ")
-        if loopend == "y":
-            loopend = True
-            continue
-        else:
-            loopend = False
-            break
-        """
-    delFromCF(txtRecords)
-    challenges_info, auth, order, order_headers, acmeTXTRecs, acmeTXTValues = getTXT(tempPrivateFile, csrFile, challengeType, caServer, email)
-    for txtRecords, acmeTXTValues, _ in challenges_info:
-        TXTRRec = TXTRec(txtRecords, exchange)
-        addToCF(TXTRRec, acmeTXTValues, email)
-    time.sleep(20) #change to 60 later
-    while True:
-        certFile, caFile = verifyTXT(tempPrivateFile, csrFile, challenges_info, auth, order, order_headers, caServer, email)
-        if checkCert(certFile):
-            break
-        else:
-            time.sleep(20)
-            continue
-    try:
-        delFromCF(txtRecords)
-        print("TXT records deleted successfully")
-    except:
-        print("error deleting TXT records")
-    print(f"Private Key: {privFile}\nSSL Certificate: {certFile}\nCA Certificate: {caFile}")

@@ -1,3 +1,0 @@
-[('_acme-challenge.dash.thenayankasturi.eu.org', 'Zi0tT_lQV7FzQTOSpE4DUvGo7ZSLFeFNFlOGC6tPe-U', 'https://acme-staging-v02.api.letsencrypt.org/acme/chall-v3/13119095293/jmnDvg'), 
-('_acme-challenge.thenayankasturi.eu.org', 'lFfPBfwgnoH1KFQz1e58u4ZQUZ1WFLShXH8pHFk4NbE', 'https://acme-staging-v02.api.letsencrypt.org/acme/chall-v3/13119095303/7yi2lQ'), 
-('_acme-challenge.www.thenayankasturi.eu.org', 'mHi2YuxCtjN6t9RSFbyGiuGBLcmrrRpU8z5hxRmWbXs', 'https://acme-staging-v02.api.letsencrypt.org/acme/chall-v3/13119095313/DTuc6w')]
