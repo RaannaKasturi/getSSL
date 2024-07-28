@@ -22,7 +22,7 @@ def pgclient(directory, keyType="rsa", keySize=None, keyCurve=None):
                 keySize = 4096
             rsa_key = rsa.generate_private_key(public_exponent=65537, key_size=keySize, backend=default_backend())
             account_key = jose.JWKRSA(key=rsa_key)
-            net = client.ClientNetwork(account_key, user_agent='simple_acme_dns/v2')
+            net = client.ClientNetwork(account_key, user_agent='project-gatekeeper/v1.5')
             directory_obj = messages.Directory.from_json(net.get(directory).json())
             acme_client = client.ClientV2(directory_obj, net=net)
             return acme_client
@@ -41,6 +41,9 @@ def pgclient(directory, keyType="rsa", keySize=None, keyCurve=None):
             directory_obj = messages.Directory.from_json(response.json())
             acme_client = client.ClientV2(directory_obj, net=net)
             return acme_client
+        else:
+            print("Invalid keyType")
+            sys.exit()
     except:
         print("Error in initialization")
         sys.exit()
