@@ -118,9 +118,6 @@ if __name__ == "__main__":
     KEYTYPE = "ec"
     KEYCURVE = "ec256"
     KEYSIZE = None
-    KID = os.getenv("KID")
-    HMAC = os.getenv('HMAC')
     print(KID)
     print(HMAC)
-    sys.exit(1)
     test(domains=DOMAINS, email=EMAIL, keyType=KEYTYPE, keySize=KEYSIZE,keyCurve=KEYCURVE, kid=KID, hmac=HMAC)
