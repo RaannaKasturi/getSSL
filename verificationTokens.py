@@ -44,7 +44,7 @@ def verifyTokens(client, challs, order):
             token = challenge.chall.token
             if isinstance(token, bytes):
                 try:
-                    token = token.decode('utf-8', errors='replace')  # Use 'replace' to handle invalid bytes
+                    token = token.decode('utf-8', errors='replace')
                 except Exception as e:
                     print(f"Error decoding token: {e}")
                     continue
