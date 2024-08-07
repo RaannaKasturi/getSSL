@@ -2,7 +2,7 @@ import requests
 import os
 from dotenv import load_dotenv
 
-def genZeroSSLEAB():
+def gen_zero_ssl_eab():
     load_dotenv()    
     apikey = os.getenv("ZEROSSLAPI")
     url = "https://api.zerossl.com/acme/eab-credentials"

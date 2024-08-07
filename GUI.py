@@ -2,8 +2,8 @@ import gradio as gr
 from main import main
 
 def run(i_domains, wildcard, email, ca_server, key_type, key_size=None, key_curve=None):
-    PRIVATEKEY, privFile, CERTIFICATE, certFile = main(i_domains, wildcard, email, ca_server, key_type, key_size, key_curve)
-    return PRIVATEKEY, privFile, CERTIFICATE, certFile
+    pvt, pvt_file, cert, cert_file = main(i_domains, wildcard, email, ca_server, key_type, key_size, key_curve)
+    return pvt, pvt_file, cert, cert_file
 
 def update_key_options(key_type):
     if key_type == "rsa":

@@ -4,7 +4,7 @@ import time
 from genPVTCSR import gen_pvt_csr
 from tools import get_domains, get_ca_server, get_kid_hmac, extract_subdomains, write_file
 from acme_tools import pg_client, new_account
-from getTokenCert import getTokens, verifyTokens
+from getTokenCert import get_tokens, verify_tokens
 from gen_records import txt_recs
 from dns_cf import add_txt, del_txt
 
@@ -47,7 +47,7 @@ def main(i_domains, wildcard, email, ca_server, key_type, key_size=None, key_cur
     if not account:
         exit()
     private_key, csr = gen_pvt_csr(domains=domains, email=email, key_type=key_type, key_curve=key_curve, key_size=key_size)
-    verification_tokens, challs, order = getTokens(pgk_client, csr, ca_server_url)
+    verification_tokens, challs, order = get_tokens(pgk_client, csr, ca_server_url)
     try:
         if wildcard:
             cf_wildcard(verification_tokens, email, exchange)
@@ -59,7 +59,7 @@ def main(i_domains, wildcard, email, ca_server, key_type, key_size=None, key_cur
     for i in range(60):
         print(f"Waiting for {60-i} seconds", end="\r")
         time.sleep(1)
-    cert = verifyTokens(pgk_client, challs, order)
+    cert = verify_tokens(pgk_client, challs, order)
     for key, value in verification_tokens.items():
         txt_rec = txt_recs(key, exchange)
         try:

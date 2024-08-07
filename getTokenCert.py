@@ -14,7 +14,7 @@ def challens(order, directory) -> dict:
         raise errors.ChallengeUnavailable(msg.format(directory=str(directory)))
     return challs
 
-def getTokens(client, csr, directory):
+def get_tokens(client, csr, directory):
     verification_tokens = {}
     responses = {}
     order = client.new_order(csr)
@@ -29,7 +29,7 @@ def getTokens(client, csr, directory):
     _verification_tokens = verification_tokens
     return verification_tokens, challs, order
 
-def verifyTokens(client, challs, order):
+def verify_tokens(client, challs, order):
     deadline = datetime.datetime.now() + datetime.timedelta(seconds=90)
     answers = []
     responses = {}
@@ -37,7 +37,7 @@ def verifyTokens(client, challs, order):
         print(f"Fetching challenges for domain: {domain}")
         for challenge in challenge_list:
             try:
-                response, validation = challenge.response_and_validation(client.net.key)
+                response, _validation = challenge.response_and_validation(client.net.key)
                 print(f"Challenge verified for domain: {domain}")
             except Exception as e:
                 print(f"Error generating response for challenge: {e}")

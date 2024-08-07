@@ -48,7 +48,6 @@ def new_account(pgclient, email, kid=None, hmac=None):
             return False
         try:
             hmac_bytes = jose.b64.b64decode(hmac)
-            hmac_key = jose.jwk.JWKOct(key=hmac_bytes)
         except Exception as e:
             print(f"Error decoding HMAC key: {e}")
             return False

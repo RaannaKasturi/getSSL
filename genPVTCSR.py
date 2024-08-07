@@ -5,7 +5,7 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.x509.oid import NameOID
 from typing import List, Tuple
 
-def genPVTKey(key_type: str, key_size: int = None, key_curve: str = None) -> bytes:
+def gen_pvt(key_type: str, key_size: int = None, key_curve: str = None) -> bytes:
     if key_type.lower() == "ec":
         if key_curve == 'SECP256R1' or key_curve == 'ec256':
             key = ec.generate_private_key(ec.SECP256R1(), default_backend())
@@ -35,16 +35,17 @@ def genPVTKey(key_type: str, key_size: int = None, key_curve: str = None) -> byt
         raise ValueError("Unsupported key type or parameters")
     return private_key
 
-def genCSR(private_key: bytes, domains: List[str], email: str, common_name: str = None, country: str = None,
+def gen_csr(private_key: bytes, domains: List[str], email: str, common_name: str = None, country: str = None,
            state: str = None, locality: str = None, organization: str = None, organization_unit: str = None) -> bytes:
     
-    sslDomains = [x509.DNSName(domain.strip()) for domain in domains]
+    ssl_domains = [x509.DNSName(domain.strip()) for domain in domains]
     private_key_obj = serialization.load_pem_private_key(private_key, password=None, backend=default_backend())
     try:
         if email.split("@")[1] in ["demo.com", "example.com"] or email.count("@") > 1 or email.count(".") < 1 or email is None:
             print("Invalid email address")
             email = f"admin@{domains[0]}"
-    except:
+    except Exception as e:
+        print(f"Error in email address: {e}")
         email = f"admin@{domains[0]}"
     country: str = country or "IN"
     state: str = state or "Maharashtra"
@@ -64,18 +65,18 @@ def genCSR(private_key: bytes, domains: List[str], email: str, common_name: str 
     builder = x509.CertificateSigningRequestBuilder()
     builder = builder.subject_name(subject)
     builder = builder.add_extension(
-        x509.SubjectAlternativeName(sslDomains),
+        x509.SubjectAlternativeName(ssl_domains),
         critical=False,
     )
     csr = builder.sign(private_key_obj, hashes.SHA256(), default_backend())
     return csr.public_bytes(serialization.Encoding.PEM)
 
 def gen_pvt_csr(domains: List[str], key_type: str, key_size: int = None, key_curve: str = None, email: str = None,
-              commonName: str = None, country: str = None, state: str = None, locality: str = None,
-              organization: str = None, organizationUnit: str = None) -> Tuple[bytes, bytes]:
+              common_name: str = None, country: str = None, state: str = None, locality: str = None,
+              organization: str = None, organization_unit: str = None) -> Tuple[bytes, bytes]:
     if key_type.lower() == "rsa":
-        private_key = genPVTKey(key_type, key_size)
+        private_key = gen_pvt(key_type, key_size)
     else:
-        private_key = genPVTKey(key_type, key_curve)
-    csr = genCSR(private_key, domains, email, commonName, country, state, locality, organization, organizationUnit)
+        private_key = gen_pvt(key_type, key_curve)
+    csr = gen_csr(private_key, domains, email, common_name, country, state, locality, organization, organization_unit)
     return private_key, csr

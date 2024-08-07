@@ -3,7 +3,7 @@ import base64
 from google.oauth2 import service_account
 from google.cloud.security.publicca import PublicCertificateAuthorityServiceClient
 
-def getGoogleEAB():
+def get_google_eab():
     with open('sak.json', 'r') as file:
         service_account_info = json.load(file)
     credentials = service_account.Credentials.from_service_account_info(service_account_info)
