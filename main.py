@@ -63,7 +63,7 @@ def main(i_domains, wildcard, email, ca_server, key_type, key_size=None, key_cur
         print(f"Waiting for {60-i} seconds", end="\r")
         time.sleep(1)
     cert = verify_tokens(pgk_client, challs, order)
-    for key, value in verification_tokens.items():
+    for key, _value in verification_tokens.items():
         txt_rec = txt_recs(key, exchange)
         try:
             del_txt(txt_rec)
@@ -79,7 +79,7 @@ def main(i_domains, wildcard, email, ca_server, key_type, key_size=None, key_cur
 
 if __name__ == "__main__":
     DOMAINS = 'thenayankasturi.eu.org, *.thenayankasturi.eu.org'    
-    ca_server = "Let's Encrypt (Testing)" #Let's Encrypt (Testing), Let's Encrypt, Buypass (Testing), Buypass, zerossl, google_test, google, ssccom
+    ca_server = "Google" #Let's Encrypt (Testing), Let's Encrypt, Buypass (Testing), Buypass, zerossl, google_test, google, ssccom
     EMAIL = "raannakasturi@mail.com"
     key_type = "ec"
     key_curve = "ec256"

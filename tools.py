@@ -52,10 +52,10 @@ def get_kid_hmac(server):
         kid, hmac = gen_zero_ssl_eab()
         return kid, hmac
     elif server == "Google (Testing)":
-        kid, hmac = gen_google_eab()
+        kid, hmac = gen_google_eab(test=True)
         return kid, hmac
     elif server == "Google":
-        kid, hmac = gen_google_eab()
+        kid, hmac = gen_google_eab(test=False)
         return kid, hmac
     else:
         return None, None
