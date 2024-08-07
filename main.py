@@ -39,14 +39,14 @@ def main(i_domains, wildcard, email, ca_server, key_type, key_size=None, key_cur
     pgk_client = pg_client(ca_server_url, key_type=key_type, key_size=key_size, key_curve=key_curve)
     if pgk_client is None:
         exit()
-    kid, hmac = get_kid_hmac(ca_server)
-    if kid == 'Error' or hmac == 'Error':
+    nkid, nhmac = get_kid_hmac(ca_server)
+    if nkid == 'Error' or nhmac == 'Error':
         print("Try with another provider or contact us")
         sys.exit(1)
     else:
-        new_kid = kid
-        new_hmac = hmac
-    account = new_account(pgk_client, email, kid=new_kid, hmac=new_hmac)
+        kid = nkid
+        hmac = nhmac
+    account = new_account(pgk_client, email, kid=kid, hmac=hmac)
     if not account:
         exit()
     private_key, csr = gen_pvt_csr(domains=domains, email=email, key_type=key_type, key_curve=key_curve, key_size=key_size)

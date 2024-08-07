@@ -16,25 +16,26 @@ def extract_subdomains(domains):
     return exchange
 
 def get_ca_server(caserver, key_type):
-    base_urls = {
+    DEFAULT_LET_ENCRYPT_URL = "https://acme-v02.api.letsencrypt.org/directory"
+    urls = {
         "SSL.com": {
             "rsa": "https://acme.ssl.com/sslcom-dv-rsa",
             "ec": "https://acme.ssl.com/sslcom-dv-ecc"
         },
         "Let's Encrypt (Testing)": "https://acme-staging-v02.api.letsencrypt.org/directory",
-        "Let's Encrypt": "https://acme-v02.api.letsencrypt.org/directory",
+        "Let's Encrypt": DEFAULT_LET_ENCRYPT_URL,
         "Buypass (Testing)": "https://api.test4.buypass.no/acme/directory",
         "Buypass": "https://api.Buypass.com/acme/directory",
         "ZeroSSL": "https://acme.zerossl.com/v2/DV90",
         "Google (Testing)": "https://dv.acme-v02.test-api.pki.goog/directory",
         "Google": "https://dv.acme-v02.api.pki.goog/directory"
     }
-    if caserver in base_urls:
-        if isinstance(base_urls[caserver], dict):
-            return base_urls[caserver].get(key_type, "https://acme-staging-v02.api.letsencrypt.org/directory")
+    if caserver in urls:
+        if isinstance(urls[caserver], dict):
+            return urls[caserver].get(key_type, DEFAULT_LET_ENCRYPT_URL)
         else:
-            return base_urls[caserver]
-    return "https://acme-staging-v02.api.letsencrypt.org/directory"
+            return urls[caserver]
+    return DEFAULT_LET_ENCRYPT_URL
 
 def get_kid_hmac(server):
     if server == "SSL.com":

@@ -29,6 +29,41 @@ def get_tokens(client, csr, directory):
     _verification_tokens = verification_tokens
     return verification_tokens, challs, order
 
+def process_challenge(client, challenge, domain):
+    try:
+        response, _validation = challenge.response_and_validation(client.net.key)
+        print(f"Challenge verified for domain: {domain}")
+        token = challenge.chall.token
+        if isinstance(token, bytes):
+            token = token.decode('utf-8', errors='replace')
+        return response, token
+    except Exception as e:
+        print(f"Error processing challenge for domain {domain}: {e}")
+        return None, None
+
+def answer_challenge(client, challenge, response, domain):
+    try:
+        answer = client.answer_challenge(challenge, response)
+        print(f"Challenge answered for domain: {domain}")
+        return answer
+    except Exception as e:
+        print(f"Error answering challenge for domain {domain}: {e}")
+        return None
+
+def finalize_order(client, order, deadline):
+    try:
+        return client.poll_and_finalize(order, deadline=deadline)
+    except Exception as e:
+        print(f"Error finalizing order: {e}")
+        return None
+
+def retrieve_certificate(final_order):
+    try:
+        return final_order.fullchain_pem.encode()
+    except Exception as e:
+        print(f"Error retrieving certificate: {e}")
+        return None
+    
 def verify_tokens(client, challs, order):
     deadline = datetime.datetime.now() + datetime.timedelta(seconds=90)
     answers = []
@@ -36,36 +71,16 @@ def verify_tokens(client, challs, order):
     for domain, challenge_list in challs.items():
         print(f"Fetching challenges for domain: {domain}")
         for challenge in challenge_list:
-            try:
-                response, _validation = challenge.response_and_validation(client.net.key)
-                print(f"Challenge verified for domain: {domain}")
-            except Exception as e:
-                print(f"Error generating response for challenge: {e}")
+            response, token = process_challenge(client, challenge, domain)
+            if response is None:
                 continue
-            token = challenge.chall.token
-            if isinstance(token, bytes):
-                try:
-                    token = token.decode('utf-8', errors='replace')
-                    print(f"Challenge verified for domain: {domain}")
-                except Exception as e:
-                    print(f"Error decoding token: {e}")
-                    continue
+            
             responses[token] = response
-            try:
-                answer = client.answer_challenge(challenge, response)
-                print(f"Challenge verified for domain: {domain}")
-            except Exception as e:
-                print(f"Error answering challenge: {e}")
-                continue
-            answers.append(answer)
-    try:
-        final_order = client.poll_and_finalize(order, deadline=deadline)
-    except Exception as e:
-        print(f"Error finalizing order: {e}")
+            answer = answer_challenge(client, challenge, response, domain)
+            if answer is not None:
+                answers.append(answer)
+    final_order = finalize_order(client, order, deadline)
+    if final_order is None:
         return None
-    try:
-        certificate = final_order.fullchain_pem.encode()
-    except Exception as e:
-        print(f"Error retrieving certificate: {e}")
-        return None
-    return certificate
+    cert = retrieve_certificate(final_order)
+    return cert
