@@ -1,7 +1,7 @@
 
 
-from getGoogleEAB import getGoogleEAB
-from getZeroSSLEAB import genZeroSSLEAB
+from getGoogleEAB import gen_google_eab
+from getZeroSSLEAB import gen_zero_ssl_eab
 
 
 def get_domains(i_domains):
@@ -16,46 +16,45 @@ def extract_subdomains(domains):
     return exchange
 
 def get_ca_server(caserver, key_type):
-    if caserver == "sslcom" and key_type == "rsa":
-        return "https://acme.ssl.com/sslcom-dv-rsa"
-    elif caserver == "sslcom" and key_type == "ec":
-        return "https://acme.ssl.com/sslcom-dv-ecc"
-    elif caserver == "letsencrypt_test" and (key_type == "rsa" or key_type == "ec"):
-        return "https://acme-staging-v02.api.letsencrypt.org/directory"
-    elif caserver == "letsencrypt" and (key_type == "rsa" or key_type == "ec"):
-        return "https://acme-v02.api.letsencrypt.org/directory"
-    elif caserver == "buypass_test" and (key_type == "rsa" or key_type == "ec"):
-        return "https://api.test4.buypass.no/acme/directory"
-    elif caserver == "buypass" and (key_type == "rsa" or key_type == "ec"):
-        return "https://api.buypass.com/acme/directory"
-    elif caserver == "zerossl" and (key_type == "rsa" or key_type == "ec"):
-        return "https://acme.zerossl.com/v2/DV90"
-    elif caserver == "google_test" and (key_type == "rsa" or key_type == "ec"):
-        return "https://dv.acme-v02.test-api.pki.goog/directory"
-    elif caserver == "google" and (key_type == "rsa" or key_type == "ec"):
-        return "https://dv.acme-v02.api.pki.goog/directory"
-    else:
-        return "https://acme-staging-v02.api.letsencrypt.org/directory"
+    base_urls = {
+        "SSL.com": {
+            "rsa": "https://acme.ssl.com/sslcom-dv-rsa",
+            "ec": "https://acme.ssl.com/sslcom-dv-ecc"
+        },
+        "Let's Encrypt (Testing)": "https://acme-staging-v02.api.letsencrypt.org/directory",
+        "Let's Encrypt": "https://acme-v02.api.letsencrypt.org/directory",
+        "Buypass (Testing)": "https://api.test4.buypass.no/acme/directory",
+        "Buypass": "https://api.Buypass.com/acme/directory",
+        "ZeroSSL": "https://acme.zerossl.com/v2/DV90",
+        "Google (Testing)": "https://dv.acme-v02.test-api.pki.goog/directory",
+        "Google": "https://dv.acme-v02.api.pki.goog/directory"
+    }
+    if caserver in base_urls:
+        if isinstance(base_urls[caserver], dict):
+            return base_urls[caserver].get(key_type, "https://acme-staging-v02.api.letsencrypt.org/directory")
+        else:
+            return base_urls[caserver]
+    return "https://acme-staging-v02.api.letsencrypt.org/directory"
 
 def get_kid_hmac(server):
-    if server == "sslcom":
+    if server == "SSL.com":
         return None, None
-    elif server == "letsencrypt_test":
+    elif server == "Let's Encrypt (Testing)":
         return None, None
-    elif server == "letsencrypt":
+    elif server == "Let's Encrypt":
         return None, None
-    elif server == "buypass_test":
+    elif server == "Buypass (Testing)":
         return None, None
-    elif server == "buypass":
+    elif server == "Buypass":
         return None, None
-    elif server == "zerossl":
-        kid, hmac = genZeroSSLEAB()
+    elif server == "ZeroSSL":
+        kid, hmac = gen_zero_ssl_eab()
         return kid, hmac
-    elif server == "google_test":
-        kid, hmac = getGoogleEAB()
+    elif server == "Google (Testing)":
+        kid, hmac = gen_google_eab()
         return kid, hmac
-    elif server == "google":
-        kid, hmac = getGoogleEAB()
+    elif server == "Google":
+        kid, hmac = gen_google_eab()
         return kid, hmac
     else:
         return None, None

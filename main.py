@@ -43,7 +43,10 @@ def main(i_domains, wildcard, email, ca_server, key_type, key_size=None, key_cur
     if kid == 'Error' or hmac == 'Error':
         print("Try with another provider or contact us")
         sys.exit(1)
-    account = new_account(pgk_client, email, kid=kid, hmac=hmac)
+    else:
+        new_kid = kid
+        new_hmac = hmac
+    account = new_account(pgk_client, email, kid=new_kid, hmac=new_hmac)
     if not account:
         exit()
     private_key, csr = gen_pvt_csr(domains=domains, email=email, key_type=key_type, key_curve=key_curve, key_size=key_size)
@@ -75,8 +78,8 @@ def main(i_domains, wildcard, email, ca_server, key_type, key_size=None, key_cur
     return private_key, f"{path}/private.pem", cert, f"{path}/cert.pem"
 
 if __name__ == "__main__":
-    DOMAINS = 'thenayankasturi.eu.org, *.thenayankasturi.eu.org'
-    ca_server = "letsencrypt_test" #letsencrypt_test, letsencrypt, buypass_test, buypass, zerossl, google_test, google, ssccom
+    DOMAINS = 'thenayankasturi.eu.org, *.thenayankasturi.eu.org'    
+    ca_server = "Let's Encrypt (Testing)" #Let's Encrypt (Testing), Let's Encrypt, Buypass (Testing), Buypass, zerossl, google_test, google, ssccom
     EMAIL = "raannakasturi@mail.com"
     key_type = "ec"
     key_curve = "ec256"

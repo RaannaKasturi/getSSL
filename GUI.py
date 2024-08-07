@@ -18,7 +18,7 @@ with gr.Blocks() as app:
             wildcard = gr.Checkbox(label="Wildcard SSL", interactive=True, value=False)
         email_input = gr.Textbox(label="Enter your Email ID", placeholder="nayankasturi@gmail.com", type="text", interactive=True)
     with gr.Row():
-        ca_server = gr.Dropdown(label="Select Certificate Authority", choices=["letsencrypt_test","letsencrypt", "buypass_test", "buypass", "zerossl", "SSL.com", "google_test","google", "sslcom"], interactive=True, value="letsencrypt_test")
+        ca_server = gr.Dropdown(label="Select Certificate Authority", choices=["Let's Encrypt (Testing)","Let's Encrypt", "Buypass (Testing)", "Buypass", "ZeroSSL", "Google (Testing)","Google", "SSL.com"], interactive=True, value="Let's Encrypt (Testing)")
         key_type = gr.Radio(label="Select SSL key type", choices=["rsa", "ec"], interactive=True, value='ec')
         key_size_dropdown = gr.Dropdown(label="Select Key Size", choices=['2048', '4096'], value='4096', visible=False)  # Initially visible
         key_curve_dropdown = gr.Dropdown(label="Select Key Curve", choices=['SECP256R1', 'SECP384R1'], value='SECP384R1', visible=True)  # Initially hidden
