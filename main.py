@@ -46,6 +46,9 @@ def main(i_domains, wildcard, email, ca_server, key_type, key_size=None, key_cur
     else:
         kid = nkid
         hmac = nhmac
+    print("KID:",kid)
+    print("HMAC:",hmac)
+    print(f"CA SERVER({ca_server}):", ca_server_url)
     account = new_account(pgk_client, email, kid=kid, hmac=hmac)
     if not account:
         exit()
@@ -76,10 +79,10 @@ def main(i_domains, wildcard, email, ca_server, key_type, key_size=None, key_cur
     write_file(f"{path}/domain.csr", csr)
     write_file(f"{path}/cert.pem", cert)
     return private_key, f"{path}/private.pem", cert, f"{path}/cert.pem"
-
+"""
 if __name__ == "__main__":
     DOMAINS = 'thenayankasturi.eu.org, *.thenayankasturi.eu.org'    
-    ca_server = "Google" #Let's Encrypt (Testing), Let's Encrypt, Buypass (Testing), Buypass, zerossl, google_test, google, ssccom
+    ca_server = "Google (Testing)" #Let's Encrypt (Testing), Let's Encrypt, Buypass (Testing), Buypass, zerossl, google_test, google, ssccom
     EMAIL = "raannakasturi@mail.com"
     key_type = "ec"
     key_curve = "ec256"
@@ -87,3 +90,4 @@ if __name__ == "__main__":
     KID = None
     HMAC = None
     main(i_domains=DOMAINS, wildcard=True, email=EMAIL, ca_server=ca_server, key_type=key_type, key_size=key_size,key_curve=key_curve, kid=KID, hmac=HMAC)
+"""
