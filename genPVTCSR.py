@@ -5,11 +5,11 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.x509.oid import NameOID
 from typing import List, Tuple
 
-def genPVTKey(keyType: str, keySize: int = None, keyCurve: str = None) -> bytes:
-    if keyType.lower() == "ec":
-        if keyCurve == 'SECP256R1' or keyCurve == 'ec256':
+def genPVTKey(key_type: str, key_size: int = None, key_curve: str = None) -> bytes:
+    if key_type.lower() == "ec":
+        if key_curve == 'SECP256R1' or key_curve == 'ec256':
             key = ec.generate_private_key(ec.SECP256R1(), default_backend())
-        elif keyCurve == 'SECP384R1' or keyCurve == 'ec384':
+        elif key_curve == 'SECP384R1' or key_curve == 'ec384':
             key = ec.generate_private_key(ec.SECP384R1(), default_backend())
         else:
             key = ec.generate_private_key(ec.SECP256R1(), default_backend())
@@ -18,12 +18,12 @@ def genPVTKey(keyType: str, keySize: int = None, keyCurve: str = None) -> bytes:
             format=serialization.PrivateFormat.TraditionalOpenSSL,
             encryption_algorithm=serialization.NoEncryption()
         )
-    elif keyType.lower() == "rsa":
-        if keySize not in [2048, 4096]:
-            keySize = 4096
+    elif key_type.lower() == "rsa":
+        if key_size not in [2048, 4096]:
+            key_size = 4096
         key = rsa.generate_private_key(
             public_exponent=65537,
-            key_size=keySize,
+            key_size=key_size,
             backend=default_backend()
         )
         private_key = key.private_bytes(
@@ -70,12 +70,12 @@ def genCSR(private_key: bytes, domains: List[str], email: str, common_name: str 
     csr = builder.sign(private_key_obj, hashes.SHA256(), default_backend())
     return csr.public_bytes(serialization.Encoding.PEM)
 
-def genPVTCSR(domains: List[str], keyType: str, keySize: int = None, keyCurve: str = None, email: str = None,
+def gen_pvt_csr(domains: List[str], key_type: str, key_size: int = None, key_curve: str = None, email: str = None,
               commonName: str = None, country: str = None, state: str = None, locality: str = None,
               organization: str = None, organizationUnit: str = None) -> Tuple[bytes, bytes]:
-    if keyType.lower() == "rsa":
-        private_key = genPVTKey(keyType, keySize)
+    if key_type.lower() == "rsa":
+        private_key = genPVTKey(key_type, key_size)
     else:
-        private_key = genPVTKey(keyType, keyCurve)
+        private_key = genPVTKey(key_type, key_curve)
     csr = genCSR(private_key, domains, email, commonName, country, state, locality, organization, organizationUnit)
     return private_key, csr

@@ -1,4 +1,6 @@
 .env
 certificate*
 /raannakasturi
+/thenayankasturi*
 /__pycache__
+*.json

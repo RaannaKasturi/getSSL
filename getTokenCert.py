@@ -38,6 +38,7 @@ def verifyTokens(client, challs, order):
         for challenge in challenge_list:
             try:
                 response, validation = challenge.response_and_validation(client.net.key)
+                print(f"Challenge verified for domain: {domain}")
             except Exception as e:
                 print(f"Error generating response for challenge: {e}")
                 continue
@@ -45,17 +46,18 @@ def verifyTokens(client, challs, order):
             if isinstance(token, bytes):
                 try:
                     token = token.decode('utf-8', errors='replace')
+                    print(f"Challenge verified for domain: {domain}")
                 except Exception as e:
                     print(f"Error decoding token: {e}")
                     continue
             responses[token] = response
             try:
                 answer = client.answer_challenge(challenge, response)
+                print(f"Challenge verified for domain: {domain}")
             except Exception as e:
                 print(f"Error answering challenge: {e}")
                 continue
             answers.append(answer)
-            print(f"Challenge answered: {answer}")
     try:
         final_order = client.poll_and_finalize(order, deadline=deadline)
     except Exception as e:
